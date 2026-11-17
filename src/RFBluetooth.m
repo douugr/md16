@@ -802,6 +802,10 @@ static void rf_bt_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint1
             }
             [bt log:[NSString stringWithFormat:@"Canal aberto: PSM 0x%02X com %@", psm, rf_addr(addr)]];
             if (psm == PSM_HID_CONTROL) {
+                // Proíbe o modo "sniff" (economia de energia) neste link: nele o controle só
+                // conversa em intervalos espaçados e os botões chegam com atraso.
+                uint16_t handle = READ_BT_16(packet, 9);
+                bt_send_cmd(&hci_write_link_policy_settings, handle, 0x0001);   // só troca de papel
                 gControlCid = cid;
                 // Conexão iniciada por nós: abre também o canal de dados
                 if (!gInterruptCid && gHasTarget && BD_ADDR_CMP(addr, gTarget) == 0) {

@@ -212,8 +212,8 @@ typedef struct {
     uint32_t queued = [audio bufferedFrames];
 
     int runs = 1;
-    if (queued > spf * 6) runs = 0;
-    else if (queued < spf * 2.5) runs = 2;   // margem maior: absorve uma volta atrasada sem faltar som
+    if (queued > spf * 4) runs = 0;
+    else if (queued < spf * 2) runs = 2;   // fila curta: menos atraso entre o jogo e o som
 
     double t0 = CACurrentMediaTime();
     for (int i = 0; i < runs; i++) {
