@@ -146,3 +146,19 @@ NSString *RFActionName(RFAction action);
 @property (nonatomic, readonly) uint16_t port;
 @property (nonatomic, copy) void (^onChange)(void);   // chamado na thread principal quando chega/sai um arquivo
 @end
+
+// Tema visual (RFTheme.m): grade cinza sobre preto, cromado, vermelho e faixas diagonais
+UIColor *RFThemeRed(void);
+UIColor *RFThemeText(void);
+UIColor *RFThemeDim(void);
+UIColor *RFThemeCard(void);
+UIColor *RFThemeGridColor(void);
+UIView *RFThemeGridView(void);
+UIFont *RFThemeDisplayFont(CGFloat size);
+UIFont *RFThemeLabelFont(CGFloat size);
+UIImage *RFThemeChromeText(NSString *text, CGFloat size);
+void RFThemeDrawStripes(CGContextRef ctx, CGRect r, CGFloat width);
+void RFThemeApplyNavigationBar(UINavigationBar *bar);
+void RFThemeApplyTable(UITableView *table);
+void RFThemeStyleCell(UITableViewCell *cell);
+void RFThemeStyleHeaderFooter(UIView *view, BOOL header);

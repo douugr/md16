@@ -7,14 +7,22 @@
 <style>
   :root { --bg:#111317; --card:#1b1e24; --line:#2c313a; --text:#e8eaee; --dim:#8b93a1; --accent:#e5413a; --ok:#3ecf8e; }
   * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background:var(--bg); color:var(--text); }
+  body { margin:0; font:15px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color:var(--text);
+         background-color:#09090a;
+         background-image:linear-gradient(#262628 1px, transparent 1px), linear-gradient(90deg, #262628 1px, transparent 1px);
+         background-size:22px 22px; }
+  header { position:relative; overflow:hidden; margin-bottom:22px; }
+  header::after { content:""; position:absolute; right:-10px; top:0; width:150px; height:100%;
+                  background:linear-gradient(115deg, transparent 0 30%, #e5413a 30% 44%, transparent 44% 52%, #f2781f 52% 62%, transparent 62% 68%, #f7c33a 68% 75%, transparent 75%); }
   main { max-width:760px; margin:0 auto; padding:32px 20px 60px; }
-  h1 { margin:0 0 4px; font-size:28px; letter-spacing:.5px; }
-  h1 span { color:var(--accent); }
-  p.sub { margin:0 0 24px; color:var(--dim); }
-  #drop { border:2px dashed var(--line); border-radius:14px; padding:40px 20px; text-align:center; background:var(--card); cursor:pointer; transition:.15s; }
+  h1 { margin:0; font:italic 900 64px/1 "Helvetica Neue", Arial, sans-serif; font-stretch:condensed; letter-spacing:-1px;
+       background:linear-gradient(#fff 0%, #cfd5df 42%, #6b7280 50%, #e8e8ee 70%, #9aa0aa 100%);
+       -webkit-background-clip:text; background-clip:text; color:transparent; -webkit-text-stroke:2px #000;
+       filter:drop-shadow(0 3px 4px rgba(0,0,0,.8)); }
+  p.sub { margin:4px 0 0; color:var(--accent); font-weight:700; letter-spacing:1.5px; font-size:13px; text-transform:uppercase; }
+  #drop { border:2px dashed #555; border-radius:10px; padding:40px 20px; text-align:center; background:rgba(16,16,19,.92); cursor:pointer; transition:.15s; }
   #drop.over { border-color:var(--accent); background:#241a1b; }
-  #drop strong { display:block; font-size:18px; margin-bottom:6px; }
+  #drop strong { display:block; font:italic 900 24px "Helvetica Neue", Arial, sans-serif; font-stretch:condensed; margin-bottom:6px; text-transform:uppercase; }
   #drop small { color:var(--dim); }
   #queue { margin:16px 0 0; }
   .job { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
@@ -23,7 +31,8 @@
   .bar i { display:block; height:100%; width:0; background:var(--accent); }
   .job.done .bar i { background:var(--ok); }
   .job .s { width:70px; text-align:right; color:var(--dim); font-size:13px; }
-  h2 { margin:32px 0 8px; font-size:17px; }
+  h2 { margin:32px 0 8px; font-size:13px; letter-spacing:1.5px; text-transform:uppercase; color:var(--accent); }
+  table { background:rgba(16,16,19,.92); border-radius:8px; }
   table { width:100%; border-collapse:collapse; }
   td { padding:9px 4px; border-bottom:1px solid var(--line); }
   td.size { color:var(--dim); text-align:right; width:90px; font-variant-numeric:tabular-nums; }
@@ -32,14 +41,16 @@
   button { background:none; border:1px solid var(--line); color:var(--dim); border-radius:6px; padding:3px 9px; cursor:pointer; font:inherit; font-size:13px; }
   button:hover { color:#fff; border-color:var(--accent); }
   .empty { color:var(--dim); padding:12px 4px; }
-  .tip { margin-top:28px; padding:14px 16px; background:var(--card); border-radius:10px; color:var(--dim); font-size:14px; }
+  .tip { margin-top:28px; padding:14px 16px; background:rgba(16,16,19,.92); border-left:4px solid var(--accent); border-radius:6px; color:var(--dim); font-size:14px; }
   .tip b { color:var(--text); }
 </style>
 </head>
 <body>
 <main>
-  <h1>MD<span>16</span></h1>
-  <p class="sub">Arraste as ROMs e os patches para cá. Eles vão direto para o iPad.</p>
+  <header>
+    <h1>MD16</h1>
+    <p class="sub">Arraste as ROMs e os patches para cá · direto para o iPad</p>
+  </header>
 
   <div id="drop">
     <strong>Solte os arquivos aqui</strong>

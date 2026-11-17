@@ -6,6 +6,7 @@ Emulador de **Mega Drive / Genesis** (também Master System, Game Gear e SG-1000
 
 ## Funcionalidades
 
+- Visual inspirado na época dos 16 bits: grade cinza sobre preto, letreiros cromados, vermelho e faixas diagonais. A biblioteca mostra os jogos como etiquetas de cartucho
 - Vídeo em OpenGL ES 2 (RGB565), com imagem nítida (pixels) ou suavizada
 - Áudio por RemoteIO, com o ritmo do jogo guiado pela fila de som: se o iPad atrasa, o emulador roda um quadro extra sem desenhar, e o jogo não fica lento nem picota
 - Controle na tela: direcional de 8 direções, A/B/C em arco como no controle original, START e botão de menu

@@ -2,7 +2,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 static UIColor *RFAccent(void) {
-    return [UIColor colorWithRed:0.35 green:0.8 blue:1 alpha:1];
+    return RFThemeRed();
 }
 
 #pragma mark - Tela do jogo
@@ -387,6 +387,7 @@ typedef struct {
     [super viewDidLoad];
     self.title = @"Controle Bluetooth";
     self.logLines = [NSMutableArray array];
+    RFThemeApplyTable(self.tableView);
     [RFBluetooth shared].delegate = self;
 }
 
@@ -485,7 +486,7 @@ typedef struct {
             if (indexPath.row == 0) {
                 cell.textLabel.text = [NSString stringWithFormat:@"Aperte: %@", RFActionName(bt.calibratingAction)];
                 cell.textLabel.font = [UIFont boldSystemFontOfSize:24];
-                cell.textLabel.textColor = [UIColor blackColor];
+                cell.textLabel.textColor = RFThemeText();
                 cell.detailTextLabel.text = @"Solte o botão depois de apertar. Toque aqui para pular este.";
             } else {
                 if (bt.hasMapping) {
@@ -506,13 +507,25 @@ typedef struct {
 
     if (bt.deviceCount == 0) {
         cell.textLabel.text = @"Nenhum ainda";
-        cell.textLabel.textColor = [UIColor grayColor];
+        cell.textLabel.textColor = RFThemeDim();
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else {
         cell.textLabel.text = [bt deviceTitleAtIndex:indexPath.row];
         cell.detailTextLabel.text = @"Toque para conectar";
     }
     return cell;
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    RFThemeStyleCell(cell);
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
+    RFThemeStyleHeaderFooter(view, YES);
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
+    RFThemeStyleHeaderFooter(view, NO);
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -554,12 +567,13 @@ typedef struct {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"Enviar ROMs";
-    self.view.backgroundColor = [UIColor colorWithWhite:0.96 alpha:1];
+    self.view.backgroundColor = RFThemeGridColor();
 
     UILabel *step = [[UILabel alloc] init];
     step.numberOfLines = 0;
     step.textAlignment = NSTextAlignmentCenter;
-    step.font = [UIFont systemFontOfSize:18];
+    step.font = RFThemeLabelFont(17);
+    step.textColor = RFThemeText();
     step.text = @"No computador (na mesma rede Wi-Fi), abra este endereço no navegador:";
     step.tag = 1;
     [self.view addSubview:step];
@@ -567,14 +581,19 @@ typedef struct {
     self.addressLabel = [[UILabel alloc] init];
     self.addressLabel.textAlignment = NSTextAlignmentCenter;
     self.addressLabel.font = [UIFont fontWithName:@"Menlo-Bold" size:34] ?: [UIFont boldSystemFontOfSize:34];
-    self.addressLabel.textColor = [UIColor colorWithRed:0.85 green:0.2 blue:0.17 alpha:1];
+    self.addressLabel.textColor = RFThemeRed();
+    self.addressLabel.backgroundColor = [UIColor colorWithWhite:0 alpha:0.75];
+    self.addressLabel.layer.borderColor = RFThemeRed().CGColor;
+    self.addressLabel.layer.borderWidth = 2;
+    self.addressLabel.layer.cornerRadius = 8;
+    self.addressLabel.clipsToBounds = YES;
     self.addressLabel.adjustsFontSizeToFitWidth = YES;
     [self.view addSubview:self.addressLabel];
 
     self.infoLabel = [[UILabel alloc] init];
     self.infoLabel.numberOfLines = 0;
     self.infoLabel.textAlignment = NSTextAlignmentCenter;
-    self.infoLabel.textColor = [UIColor darkGrayColor];
+    self.infoLabel.textColor = RFThemeDim();
     self.infoLabel.font = [UIFont systemFontOfSize:16];
     [self.view addSubview:self.infoLabel];
 }
@@ -585,8 +604,8 @@ typedef struct {
     CGFloat x = (self.view.bounds.size.width - w) / 2;
     CGFloat y = self.topLayoutGuide.length + 50;
     [self.view viewWithTag:1].frame = CGRectMake(x, y, w, 50);
-    self.addressLabel.frame = CGRectMake(x, y + 60, w, 50);
-    self.infoLabel.frame = CGRectMake(x, y + 130, w, 200);
+    self.addressLabel.frame = CGRectMake(x, y + 60, w, 64);
+    self.infoLabel.frame = CGRectMake(x, y + 140, w, 200);
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -628,6 +647,153 @@ typedef struct {
 
 @end
 
+#pragma mark - Cartucho (célula da biblioteca)
+
+// Cartão no formato de etiqueta de cartucho: grade, faixas diagonais e selo do sistema
+@interface RFCartView : UIView
+@property (nonatomic, copy) NSString *badge;     // MD, MS, GG
+@property (nonatomic, assign) BOOL lit;          // destacado (toque)
+@end
+
+@implementation RFCartView
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    if ((self = [super initWithFrame:frame])) {
+        self.opaque = NO;
+        self.backgroundColor = [UIColor clearColor];
+        self.contentMode = UIViewContentModeRedraw;
+    }
+    return self;
+}
+
+- (void)setLit:(BOOL)lit {
+    _lit = lit;
+    [self setNeedsDisplay];
+}
+
+- (void)drawRect:(CGRect)rect {
+    CGContextRef ctx = UIGraphicsGetCurrentContext();
+    CGRect r = CGRectInset(self.bounds, 1, 1);
+    UIBezierPath *card = [UIBezierPath bezierPathWithRoundedRect:r cornerRadius:6];
+
+    // Corpo preto com a grade por cima
+    CGContextSaveGState(ctx);
+    [card addClip];
+    [RFThemeCard() setFill];
+    UIRectFill(r);
+    CGContextSetAlpha(ctx, 0.55);
+    [RFThemeGridColor() setFill];
+    UIRectFill(r);
+    CGContextSetAlpha(ctx, 1);
+    // Faixa vertical do selo à esquerda
+    CGFloat badgeW = r.size.height * 0.95;
+    [[UIColor colorWithWhite:0.02 alpha:0.9] setFill];
+    UIRectFill(CGRectMake(r.origin.x, r.origin.y, badgeW, r.size.height));
+    // Faixas diagonais à direita
+    RFThemeDrawStripes(ctx, CGRectMake(CGRectGetMaxX(r) - r.size.height * 1.15, r.origin.y, r.size.height, r.size.height), r.size.height * 0.16);
+    CGContextRestoreGState(ctx);
+
+    // Selo do sistema
+    NSDictionary *attrs = @{NSFontAttributeName: RFThemeDisplayFont(r.size.height * 0.36),
+                            NSForegroundColorAttributeName: RFThemeRed()};
+    CGSize bs = [self.badge sizeWithAttributes:attrs];
+    [self.badge drawAtPoint:CGPointMake(r.origin.x + (badgeW - bs.width) / 2, CGRectGetMidY(r) - bs.height / 2) withAttributes:attrs];
+
+    // Moldura: cinza normal, vermelha quando tocado
+    card.lineWidth = self.lit ? 3 : 1.5;
+    [(self.lit ? RFThemeRed() : [UIColor colorWithWhite:0.25 alpha:1]) setStroke];
+    [card stroke];
+}
+
+@end
+
+@interface RFCartCell : UITableViewCell
+@property (nonatomic, strong) RFCartView *cart;
+@property (nonatomic, strong) UILabel *title;
+@property (nonatomic, strong) UILabel *subtitle;
+@end
+
+@implementation RFCartCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
+    if ((self = [super initWithStyle:UITableViewCellStyleDefault reuseIdentifier:reuseIdentifier])) {
+        self.backgroundColor = [UIColor clearColor];
+        self.selectionStyle = UITableViewCellSelectionStyleNone;
+        self.cart = [[RFCartView alloc] init];
+        [self.contentView addSubview:self.cart];
+        self.title = [[UILabel alloc] init];
+        self.title.font = RFThemeDisplayFont(24);
+        self.title.textColor = RFThemeText();
+        self.title.adjustsFontSizeToFitWidth = YES;
+        self.title.minimumScaleFactor = 0.6;
+        [self.contentView addSubview:self.title];
+        self.subtitle = [[UILabel alloc] init];
+        self.subtitle.font = RFThemeLabelFont(12);
+        self.subtitle.textColor = RFThemeDim();
+        [self.contentView addSubview:self.subtitle];
+    }
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGRect b = self.contentView.bounds;
+    CGFloat margin = b.size.width > 600 ? 40 : 14;
+    CGRect card = CGRectMake(margin, 6, b.size.width - margin * 2, b.size.height - 12);
+    self.cart.frame = card;
+    CGFloat left = card.origin.x + card.size.height * 0.95 + 18;
+    CGFloat right = CGRectGetMaxX(card) - card.size.height * 1.25;
+    self.title.frame = CGRectMake(left, card.origin.y + card.size.height * 0.16, right - left, card.size.height * 0.46);
+    self.subtitle.frame = CGRectMake(left, CGRectGetMaxY(self.title.frame), right - left, card.size.height * 0.26);
+}
+
+- (void)setHighlighted:(BOOL)highlighted animated:(BOOL)animated {
+    [super setHighlighted:highlighted animated:animated];
+    self.cart.lit = highlighted;
+}
+
+@end
+
+// Cabeçalho da biblioteca: letreiro cromado sobre a grade
+@interface RFLibraryHeader : UIView
+@property (nonatomic, strong) UIImageView *logo;
+@property (nonatomic, strong) UILabel *tagline;
+@end
+
+@implementation RFLibraryHeader
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    if ((self = [super initWithFrame:frame])) {
+        self.backgroundColor = [UIColor clearColor];
+        self.opaque = NO;
+        self.contentMode = UIViewContentModeRedraw;
+        self.logo = [[UIImageView alloc] initWithImage:RFThemeChromeText(@"MD16", 86)];
+        [self addSubview:self.logo];
+        self.tagline = [[UILabel alloc] init];
+        self.tagline.font = RFThemeLabelFont(14);
+        self.tagline.textColor = RFThemeRed();
+        [self addSubview:self.tagline];
+    }
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGFloat margin = self.bounds.size.width > 600 ? 40 : 14;
+    CGSize ls = self.logo.image.size;
+    self.logo.frame = CGRectMake(margin - 8, 14, ls.width, ls.height);
+    self.tagline.frame = CGRectMake(margin, CGRectGetMaxY(self.logo.frame) - 4, self.bounds.size.width - margin * 2, 20);
+    [self setNeedsDisplay];
+}
+
+- (void)drawRect:(CGRect)rect {
+    // Faixas diagonais atravessando o canto direito, como nas caixas de 1993
+    CGFloat h = self.bounds.size.height;
+    RFThemeDrawStripes(UIGraphicsGetCurrentContext(), CGRectMake(self.bounds.size.width - h * 1.6, 0, h, h), h * 0.12);
+}
+
+@end
+
 #pragma mark - Biblioteca de jogos
 
 @interface RFLibraryViewController : UITableViewController <RFBluetoothDelegate>
@@ -639,6 +805,14 @@ typedef struct {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"MD16";
+    self.navigationItem.titleView = [[UIView alloc] init];   // o letreiro fica no cabeçalho
+    self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Jogos" style:UIBarButtonItemStylePlain target:nil action:nil];
+    self.tableView.backgroundView = RFThemeGridView();
+    self.tableView.backgroundColor = [UIColor blackColor];
+    self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    self.tableView.rowHeight = 92;
+    self.tableView.indicatorStyle = UIScrollViewIndicatorStyleWhite;
+    self.tableView.tableHeaderView = [[RFLibraryHeader alloc] initWithFrame:CGRectMake(0, 0, 320, 150)];
     self.navigationItem.rightBarButtonItems = @[
         [[UIBarButtonItem alloc] initWithTitle:@"Controle" style:UIBarButtonItemStylePlain target:self action:@selector(openController)],
         [[UIBarButtonItem alloc] initWithTitle:@"Enviar ROMs" style:UIBarButtonItemStylePlain target:self action:@selector(openUpload)],
@@ -671,6 +845,9 @@ typedef struct {
         if ([exts containsObject:f.pathExtension.lowercaseString]) [list addObject:f];
     }
     self.roms = [list sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+    RFLibraryHeader *header = (RFLibraryHeader *)self.tableView.tableHeaderView;
+    header.tagline.text = self.roms.count == 1 ? @"1 CARTUCHO NA ESTANTE · APERTE START" :
+                          [NSString stringWithFormat:@"%lu CARTUCHOS NA ESTANTE · APERTE START", (unsigned long)self.roms.count];
     [self updatePrompt];
     [self.tableView reloadData];
 }
@@ -689,21 +866,26 @@ typedef struct {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (self.roms.count) return nil;
-    return @"Nenhum jogo ainda. Toque em \"Enviar ROMs\" para mandar os arquivos pelo navegador do computador.";
+    return @"Nenhum cartucho ainda. Toque em \"Enviar ROMs\" para mandar os arquivos pelo navegador do computador.";
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
+    RFThemeStyleHeaderFooter(view, NO);
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"rom"];
-    if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"rom"];
-        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    }
+    RFCartCell *cell = [tableView dequeueReusableCellWithIdentifier:@"cart"];
+    if (!cell) cell = [[RFCartCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"cart"];
     NSString *f = self.roms[indexPath.row];
-    cell.textLabel.text = f.stringByDeletingPathExtension;
+    cell.title.text = f.stringByDeletingPathExtension.uppercaseString;
     NSString *ext = f.pathExtension.lowercaseString;
-    NSString *system = [@[@"sms"] containsObject:ext] ? @"Master System" : ([ext isEqualToString:@"gg"] ? @"Game Gear" : @"Mega Drive");
+    BOOL ms = [ext isEqualToString:@"sms"] || [ext isEqualToString:@"sg"];
+    BOOL gg = [ext isEqualToString:@"gg"];
+    NSString *system = ms ? @"MASTER SYSTEM" : (gg ? @"GAME GEAR" : @"MEGA DRIVE · 16 BITS");
+    cell.cart.badge = ms ? @"MS" : (gg ? @"GG" : @"MD");
+    [cell.cart setNeedsDisplay];
     NSString *patch = [RFCore patchPathForROM:[RFDir(@"roms") stringByAppendingPathComponent:f]];
-    cell.detailTextLabel.text = patch ? [NSString stringWithFormat:@"%@ · com patch (%@)", system, patch.pathExtension.uppercaseString] : system;
+    cell.subtitle.text = patch ? [NSString stringWithFormat:@"%@ · COM PATCH %@", system, patch.pathExtension.uppercaseString] : system;
     return cell;
 }
 
@@ -763,7 +945,8 @@ typedef struct {
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[RFLibraryViewController alloc] initWithStyle:UITableViewStylePlain]];
-    nav.navigationBar.tintColor = RFAccent();
+    RFThemeApplyNavigationBar(nav.navigationBar);
+    self.window.tintColor = RFThemeRed();
     self.window.rootViewController = nav;
     [self.window makeKeyAndVisible];
     application.idleTimerDisabled = YES;
