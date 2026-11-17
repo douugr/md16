@@ -1,4 +1,4 @@
-// Retro16 — frontend libretro mínimo para iPad com iOS 8 (armv7) + Genesis Plus GX
+// MD16 — frontend libretro mínimo para iPad com iOS 8 (armv7) + Genesis Plus GX
 #import <UIKit/UIKit.h>
 #include <stdint.h>
 
@@ -24,10 +24,10 @@
 extern volatile uint32_t rf_touch_mask;
 extern volatile uint32_t rf_pad_mask;
 
-// Pastas: Documents/Retro16/{roms,saves,states,system}
+// Pastas: Documents/MD16/{roms,saves,states,system}
 NSString *RFBaseDir(void);
 NSString *RFDir(NSString *name);
-// Acrescenta uma linha com horário em Documents/Retro16/<file> (diagnóstico; arquivo limitado a ~200 KB)
+// Acrescenta uma linha com horário em Documents/MD16/<file> (diagnóstico; arquivo limitado a ~200 KB)
 void RFAppendLog(NSString *file, NSString *line);
 
 #pragma mark - Core
@@ -40,6 +40,10 @@ void RFAppendLog(NSString *file, NSString *line);
 @property (nonatomic, readonly) BOOL loaded;
 @property (nonatomic, readonly, copy) NSString *gameName;
 - (BOOL)loadGameAtPath:(NSString *)path error:(NSString **)error;
+// Patch .ips/.bps com o mesmo nome da ROM, na mesma pasta (nil se não houver)
++ (NSString *)patchPathForROM:(NSString *)romPath;
+// O jogo carregado está com patch aplicado?
+@property (nonatomic, readonly) BOOL patched;
 - (void)runFrame;
 // Roda um quadro; com skip=YES o core não desenha o vídeo (só emula e gera áudio)
 - (void)runFrameSkippingVideo:(BOOL)skip;
@@ -130,4 +134,15 @@ NSString *RFActionName(RFAction action);
 - (void)startCalibration;
 - (void)skipCalibrationStep;
 - (void)cancelCalibration;
+@end
+
+// Servidor HTTP para enviar ROMs pelo navegador (tela "Enviar ROMs")
+@interface RFWebServer : NSObject
++ (instancetype)shared;
++ (NSString *)localIPAddress;   // IP do Wi-Fi (nil se não estiver conectado)
+- (BOOL)startOnPort:(uint16_t)port error:(NSString **)error;
+- (void)stop;
+@property (nonatomic, readonly) BOOL running;
+@property (nonatomic, readonly) uint16_t port;
+@property (nonatomic, copy) void (^onChange)(void);   // chamado na thread principal quando chega/sai um arquivo
 @end

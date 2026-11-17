@@ -106,6 +106,7 @@ typedef struct {
     if (![RFCore shared].loaded || self.link) return;
     self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick)];
     [self.link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+    if ([RFCore shared].patched) [self showToast:@"Patch aplicado"];
     if ([[RFCore shared] hasStateSlot:0]) [self offerResume];
 }
 
@@ -540,6 +541,93 @@ typedef struct {
 
 @end
 
+#pragma mark - Enviar ROMs pelo navegador
+
+@interface RFUploadViewController : UIViewController
+@property (nonatomic, strong) UILabel *addressLabel;
+@property (nonatomic, strong) UILabel *infoLabel;
+@property (nonatomic, assign) NSInteger received;
+@end
+
+@implementation RFUploadViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"Enviar ROMs";
+    self.view.backgroundColor = [UIColor colorWithWhite:0.96 alpha:1];
+
+    UILabel *step = [[UILabel alloc] init];
+    step.numberOfLines = 0;
+    step.textAlignment = NSTextAlignmentCenter;
+    step.font = [UIFont systemFontOfSize:18];
+    step.text = @"No computador (na mesma rede Wi-Fi), abra este endereço no navegador:";
+    step.tag = 1;
+    [self.view addSubview:step];
+
+    self.addressLabel = [[UILabel alloc] init];
+    self.addressLabel.textAlignment = NSTextAlignmentCenter;
+    self.addressLabel.font = [UIFont fontWithName:@"Menlo-Bold" size:34] ?: [UIFont boldSystemFontOfSize:34];
+    self.addressLabel.textColor = [UIColor colorWithRed:0.85 green:0.2 blue:0.17 alpha:1];
+    self.addressLabel.adjustsFontSizeToFitWidth = YES;
+    [self.view addSubview:self.addressLabel];
+
+    self.infoLabel = [[UILabel alloc] init];
+    self.infoLabel.numberOfLines = 0;
+    self.infoLabel.textAlignment = NSTextAlignmentCenter;
+    self.infoLabel.textColor = [UIColor darkGrayColor];
+    self.infoLabel.font = [UIFont systemFontOfSize:16];
+    [self.view addSubview:self.infoLabel];
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    CGFloat w = MIN(self.view.bounds.size.width - 40, 640);
+    CGFloat x = (self.view.bounds.size.width - w) / 2;
+    CGFloat y = self.topLayoutGuide.length + 50;
+    [self.view viewWithTag:1].frame = CGRectMake(x, y, w, 50);
+    self.addressLabel.frame = CGRectMake(x, y + 60, w, 50);
+    self.infoLabel.frame = CGRectMake(x, y + 130, w, 200);
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    RFWebServer *server = [RFWebServer shared];
+    __weak RFUploadViewController *weakSelf = self;
+    server.onChange = ^{
+        weakSelf.received++;
+        [weakSelf updateInfo];
+    };
+    NSString *ip = [RFWebServer localIPAddress];
+    NSString *error = nil;
+    if (!ip) {
+        self.addressLabel.text = @"Sem Wi-Fi";
+        self.infoLabel.text = @"Conecte o iPad a uma rede Wi-Fi e abra esta tela de novo.";
+        return;
+    }
+    if (![server startOnPort:8080 error:&error]) {
+        self.addressLabel.text = @"Erro";
+        self.infoLabel.text = error;
+        return;
+    }
+    self.addressLabel.text = [NSString stringWithFormat:@"http://%@:%u", ip, server.port];
+    [self updateInfo];
+}
+
+- (void)updateInfo {
+    NSString *base = @"Arraste as ROMs (e os patches .ips/.bps) para a página.\n"
+                     @"Patch com o mesmo nome da ROM é aplicado automaticamente ao abrir o jogo.\n\n"
+                     @"O envio só funciona enquanto esta tela estiver aberta.";
+    self.infoLabel.text = self.received ? [NSString stringWithFormat:@"%@\n\nAlterações recebidas: %ld", base, (long)self.received] : base;
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [[RFWebServer shared] stop];
+    [RFWebServer shared].onChange = nil;
+}
+
+@end
+
 #pragma mark - Biblioteca de jogos
 
 @interface RFLibraryViewController : UITableViewController <RFBluetoothDelegate>
@@ -550,11 +638,11 @@ typedef struct {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"Retro16";
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Controle"
-                                                                              style:UIBarButtonItemStylePlain
-                                                                             target:self
-                                                                             action:@selector(openController)];
+    self.title = @"MD16";
+    self.navigationItem.rightBarButtonItems = @[
+        [[UIBarButtonItem alloc] initWithTitle:@"Controle" style:UIBarButtonItemStylePlain target:self action:@selector(openController)],
+        [[UIBarButtonItem alloc] initWithTitle:@"Enviar ROMs" style:UIBarButtonItemStylePlain target:self action:@selector(openUpload)],
+    ];
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh
                                                                                           target:self
                                                                                           action:@selector(reload)];
@@ -587,6 +675,10 @@ typedef struct {
     [self.tableView reloadData];
 }
 
+- (void)openUpload {
+    [self.navigationController pushViewController:[[RFUploadViewController alloc] init] animated:YES];
+}
+
 - (void)openController {
     [self.navigationController pushViewController:[[RFControllerViewController alloc] init] animated:YES];
 }
@@ -597,7 +689,7 @@ typedef struct {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (self.roms.count) return nil;
-    return [NSString stringWithFormat:@"Nenhum jogo ainda. Copie as ROMs (.md, .gen, .bin, .sms, .gg) para:\n%@", RFDir(@"roms")];
+    return @"Nenhum jogo ainda. Toque em \"Enviar ROMs\" para mandar os arquivos pelo navegador do computador.";
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -609,8 +701,34 @@ typedef struct {
     NSString *f = self.roms[indexPath.row];
     cell.textLabel.text = f.stringByDeletingPathExtension;
     NSString *ext = f.pathExtension.lowercaseString;
-    cell.detailTextLabel.text = [@[@"sms"] containsObject:ext] ? @"Master System" : ([ext isEqualToString:@"gg"] ? @"Game Gear" : @"Mega Drive");
+    NSString *system = [@[@"sms"] containsObject:ext] ? @"Master System" : ([ext isEqualToString:@"gg"] ? @"Game Gear" : @"Mega Drive");
+    NSString *patch = [RFCore patchPathForROM:[RFDir(@"roms") stringByAppendingPathComponent:f]];
+    cell.detailTextLabel.text = patch ? [NSString stringWithFormat:@"%@ · com patch (%@)", system, patch.pathExtension.uppercaseString] : system;
     return cell;
+}
+
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+    return YES;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForDeleteConfirmationButtonForRowAtIndexPath:(NSIndexPath *)indexPath {
+    return @"Apagar";
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)style forRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (style != UITableViewCellEditingStyleDelete) return;
+    NSString *f = self.roms[indexPath.row];
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Apagar jogo?"
+                                                               message:[NSString stringWithFormat:@"%@ será removido do iPad (saves e estados ficam guardados).", f]
+                                                        preferredStyle:UIAlertControllerStyleAlert];
+    [a addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
+        [tableView setEditing:NO animated:YES];
+    }]];
+    [a addAction:[UIAlertAction actionWithTitle:@"Apagar" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *x) {
+        [[NSFileManager defaultManager] removeItemAtPath:[RFDir(@"roms") stringByAppendingPathComponent:f] error:nil];
+        [self reload];
+    }]];
+    [self presentViewController:a animated:YES completion:nil];
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -630,6 +748,18 @@ typedef struct {
 
 @implementation RFAppDelegate
 
+// O app se chamava Retro16 (com.douglasneto.retro16): traz o controle salvo e as opções
+- (void)migrateOldPreferences {
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    if ([d boolForKey:@"MD16Migrated"]) return;
+    NSDictionary *old = [d persistentDomainForName:@"com.douglasneto.retro16"];
+    for (NSString *key in old) {
+        if (![d objectForKey:key]) [d setObject:old[key] forKey:key];
+    }
+    [d setBool:YES forKey:@"MD16Migrated"];
+    [d synchronize];
+}
+
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[RFLibraryViewController alloc] initWithStyle:UITableViewStylePlain]];
@@ -637,6 +767,7 @@ typedef struct {
     self.window.rootViewController = nav;
     [self.window makeKeyAndVisible];
     application.idleTimerDisabled = YES;
+    [self migrateOldPreferences];
     [[RFBluetooth shared] start];
     return YES;
 }

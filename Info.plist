@@ -5,9 +5,9 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>pt_BR</string>
 	<key>CFBundleDisplayName</key>
-	<string>Retro16</string>
+	<string>MD16</string>
 	<key>CFBundleExecutable</key>
-	<string>Retro16</string>
+	<string>MD16</string>
 	<key>CFBundleIconFiles</key>
 	<array>
 		<string>Icon-60</string>
@@ -34,11 +34,11 @@
 		</dict>
 	</dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.douglasneto.retro16</string>
+	<string>com.douglasneto.md16</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Retro16</string>
+	<string>MD16</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

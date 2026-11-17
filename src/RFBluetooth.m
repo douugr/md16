@@ -170,7 +170,7 @@ static void rf_next_name(void) {
     if (self.btThread) return;
     dispatch_semaphore_t ready = dispatch_semaphore_create(0);
     NSThread *t = [[NSThread alloc] initWithTarget:self selector:@selector(btThreadMain:) object:ready];
-    t.name = @"Retro16.Bluetooth";
+    t.name = @"MD16.Bluetooth";
     t.threadPriority = 0.9;
     if ([t respondsToSelector:@selector(setQualityOfService:)]) t.qualityOfService = NSQualityOfServiceUserInteractive;
     self.btThread = t;
@@ -216,7 +216,7 @@ static void rf_main(dispatch_block_t block) {
 #pragma mark Registro e avisos
 
 - (void)log:(NSString *)text {
-    NSLog(@"[Retro16 BT] %@", text);
+    NSLog(@"[MD16 BT] %@", text);
     RFAppendLog(@"bt.txt", text);
     @synchronized (self) {
         if (!self.logBuffer) self.logBuffer = [NSMutableArray array];
@@ -251,7 +251,7 @@ static void rf_main(dispatch_block_t block) {
 - (void)bt_start {
     if (self.started) return;
     self.started = YES;
-    [self log:@"---- Retro16 iniciado ----"];
+    [self log:@"---- MD16 iniciado ----"];
     run_loop_init(RUN_LOOP_COCOA);
     if (bt_open()) {
         self.available = NO;

@@ -1,12 +1,17 @@
 #import "RF.h"
 #include "libretro.h"
+#include "rf_patch.h"
 
 volatile uint32_t rf_touch_mask = 0;
 volatile uint32_t rf_pad_mask = 0;
 
 NSString *RFBaseDir(void) {
     NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-    NSString *base = [docs stringByAppendingPathComponent:@"Retro16"];
+    NSString *base = [docs stringByAppendingPathComponent:@"MD16"];
+    // O app se chamava Retro16: traz ROMs, saves e estados da pasta antiga
+    NSString *old = [docs stringByAppendingPathComponent:@"Retro16"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if (![fm fileExistsAtPath:base] && [fm fileExistsAtPath:old]) [fm moveItemAtPath:old toPath:base error:nil];
     [[NSFileManager defaultManager] createDirectoryAtPath:base withIntermediateDirectories:YES attributes:nil error:nil];
     return base;
 }
@@ -116,6 +121,7 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
 @property (nonatomic, readwrite) BOOL loaded;
 @property (nonatomic, readwrite, copy) NSString *gameName;
 @property (nonatomic, assign) BOOL initialized;
+@property (nonatomic, readwrite) BOOL patched;
 @end
 
 @implementation RFCore
@@ -154,9 +160,70 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
     return [RFDir(@"states") stringByAppendingPathComponent:file];
 }
 
++ (NSString *)patchPathForROM:(NSString *)romPath {
+    NSString *base = romPath.stringByDeletingPathExtension;
+    NSFileManager *fm = [NSFileManager defaultManager];
+    for (NSString *ext in @[@"bps", @"BPS", @"ips", @"IPS"]) {
+        NSString *p = [base stringByAppendingPathExtension:ext];
+        if ([fm fileExistsAtPath:p]) return p;
+    }
+    return nil;
+}
+
+// Aplica o patch numa cópia temporária (a ROM original não é alterada)
+- (NSString *)patchedCopyOf:(NSString *)romPath patch:(NSString *)patchPath error:(NSString **)error {
+    NSData *rom = [NSData dataWithContentsOfFile:romPath];
+    NSData *patch = [NSData dataWithContentsOfFile:patchPath];
+    if (!rom || !patch) {
+        if (error) *error = @"Não consegui ler a ROM ou o patch.";
+        return nil;
+    }
+    uint8_t *out = NULL;
+    size_t outLen = 0;
+    rf_patch_result r = rf_apply_patch(rom.bytes, rom.length, patch.bytes, patch.length, &out, &outLen);
+    if (r != RF_PATCH_OK) {
+        if (error) {
+            switch (r) {
+                case RF_PATCH_WRONG_SOURCE:
+                    *error = [NSString stringWithFormat:@"O patch %@ foi feito para outra versão desta ROM (a assinatura CRC não bate). Use a ROM original indicada na página do hack.", patchPath.lastPathComponent];
+                    break;
+                case RF_PATCH_UNKNOWN_FORMAT:
+                    *error = [NSString stringWithFormat:@"%@ não é um patch IPS nem BPS.", patchPath.lastPathComponent];
+                    break;
+                case RF_PATCH_NO_MEMORY:
+                    *error = @"Memória insuficiente para aplicar o patch.";
+                    break;
+                default:
+                    *error = [NSString stringWithFormat:@"O patch %@ parece estar danificado.", patchPath.lastPathComponent];
+                    break;
+            }
+        }
+        return nil;
+    }
+    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"patched"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *dest = [dir stringByAppendingPathComponent:romPath.lastPathComponent];
+    NSData *data = [NSData dataWithBytesNoCopy:out length:outLen freeWhenDone:YES];
+    if (![data writeToFile:dest atomically:YES]) {
+        if (error) *error = @"Não consegui gravar a ROM com patch.";
+        return nil;
+    }
+    return dest;
+}
+
 - (BOOL)loadGameAtPath:(NSString *)path error:(NSString **)error {
     [self ensureInit];
     if (self.loaded) [self unload];
+
+    NSString *originalPath = path;
+    NSString *patchPath = [RFCore patchPathForROM:path];
+    self.patched = NO;
+    if (patchPath) {
+        NSString *patchedPath = [self patchedCopyOf:path patch:patchPath error:error];
+        if (!patchedPath) return NO;
+        path = patchedPath;
+        self.patched = YES;
+    }
 
     struct retro_game_info info;
     memset(&info, 0, sizeof(info));
@@ -174,7 +241,7 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
     if (av.geometry.aspect_ratio > 0) rf_aspect = av.geometry.aspect_ratio;
     else if (av.geometry.base_height) rf_aspect = (float)av.geometry.base_width / av.geometry.base_height;
 
-    self.gameName = path.lastPathComponent.stringByDeletingPathExtension;
+    self.gameName = originalPath.lastPathComponent.stringByDeletingPathExtension;
     self.loaded = YES;
     rf_frame_data = NULL;
 

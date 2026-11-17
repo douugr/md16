@@ -1,8 +1,8 @@
 #!/bin/bash
-# Retro16: emulador de Mega Drive / Master System / Game Gear para iPad com iOS 8 (armv7).
+# MD16: emulador de Mega Drive / Master System / Game Gear para iPad com iOS 8 (armv7).
 # Core: Genesis Plus GX (libretro), compilado junto no app. Controle Bluetooth via BTstack.
 #
-# Uso:  ./build.sh            -> compila (build/Retro16.app)
+# Uso:  ./build.sh            -> compila (build/MD16.app)
 #       ./build.sh install    -> compila e instala em /Applications do iPad (fora do sandbox, por causa do BTstack)
 #       ./build.sh roms       -> envia as ROMs de ../roms para o iPad
 #
@@ -10,7 +10,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP=Retro16
+APP=MD16
 IPAD="${IPAD:-192.168.1.105}"
 SSH_OPTS=(-o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa
           -o KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1)
@@ -22,9 +22,9 @@ if [ "${1:-}" = "roms" ]; then
     SRC="$ROOT/roms"
     [ -d "$SRC" ] || { echo "Crie a pasta $SRC e coloque as ROMs nela." >&2; exit 1; }
     echo "==> Enviando ROMs de $SRC"
-    ssh "${SSH_OPTS[@]}" "root@$IPAD" 'mkdir -p /var/mobile/Documents/Retro16/roms'
+    ssh "${SSH_OPTS[@]}" "root@$IPAD" 'mkdir -p /var/mobile/Documents/MD16/roms'
     COPYFILE_DISABLE=1 tar -C "$SRC" -cf - . | ssh "${SSH_OPTS[@]}" "root@$IPAD" \
-        'tar -C /var/mobile/Documents/Retro16/roms -xf - && chown -R mobile:mobile /var/mobile/Documents/Retro16 && ls -la /var/mobile/Documents/Retro16/roms'
+        'tar -C /var/mobile/Documents/MD16/roms -xf - && chown -R mobile:mobile /var/mobile/Documents/MD16 && ls -la /var/mobile/Documents/MD16/roms'
     exit 0
 fi
 
@@ -82,13 +82,13 @@ echo "==> Compilando o app (armv7, iOS 8.0)"
 "$TC/clang" -arch armv7 -isysroot "$SDK" -miphoneos-version-min=8.0 -B "$TC" \
     -fobjc-arc -O2 -Wall -Wno-unused-parameter -Wunguarded-availability \
     -I src -I vendor/btstack -I core/gpgx/libretro/libretro-common/include \
-    src/*.m "$CORE_LIB" -o "$OUT/$APP" \
+    src/*.m src/*.c "$CORE_LIB" -o "$OUT/$APP" \
     -L vendor -lBTstackLink \
     -framework Foundation -framework UIKit -framework CoreGraphics -framework QuartzCore \
     -framework GLKit -framework OpenGLES -framework AudioToolbox -framework AVFoundation
 
 cp Info.plist "$OUT/"
-cp resources/*.png "$OUT/"
+cp resources/*.png resources/*.html "$OUT/"
 if command -v ldid >/dev/null 2>&1; then ldid -S "$OUT/$APP"; else codesign -f -s - "$OUT/$APP"; fi
 lipo -info "$OUT/$APP"
 echo "==> OK: $OUT ($(du -sh "$OUT" | cut -f1))"
@@ -96,6 +96,6 @@ echo "==> OK: $OUT ($(du -sh "$OUT" | cut -f1))"
 if [ "${1:-}" = "install" ]; then
     echo "==> Instalando em /Applications/$APP.app"
     COPYFILE_DISABLE=1 tar -C build -cf - "$APP.app" | ssh "${SSH_OPTS[@]}" "root@$IPAD" \
-        "rm -rf /Applications/$APP.app && tar -C /Applications -xf - && chown -R root:wheel /Applications/$APP.app && chmod -R 755 /Applications/$APP.app && mkdir -p /var/mobile/Documents/Retro16/roms && chown -R mobile:mobile /var/mobile/Documents/Retro16 && (su mobile -c uicache || uicache)"
+        "rm -rf /Applications/$APP.app /Applications/Retro16.app && ([ -d /var/mobile/Documents/Retro16 ] && [ ! -d /var/mobile/Documents/MD16 ] && mv /var/mobile/Documents/Retro16 /var/mobile/Documents/MD16; true) && tar -C /Applications -xf - && chown -R root:wheel /Applications/$APP.app && chmod -R 755 /Applications/$APP.app && mkdir -p /var/mobile/Documents/MD16/roms && chown -R mobile:mobile /var/mobile/Documents/MD16 && (su mobile -c uicache || uicache)"
     echo "==> Instalado."
 fi
