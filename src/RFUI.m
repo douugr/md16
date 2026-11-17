@@ -1,0 +1,659 @@
+#import "RF.h"
+#import <QuartzCore/QuartzCore.h>
+
+static UIColor *RFAccent(void) {
+    return [UIColor colorWithRed:0.35 green:0.8 blue:1 alpha:1];
+}
+
+#pragma mark - Tela do jogo
+
+@interface RFGameViewController : UIViewController
+- (instancetype)initWithPath:(NSString *)path;
+@end
+
+@interface RFGameViewController ()
+@property (nonatomic, copy) NSString *path;
+@property (nonatomic, strong) RFGLView *video;
+@property (nonatomic, strong) RFTouchPad *pad;
+@property (nonatomic, strong) CADisplayLink *link;
+@property (nonatomic, assign) BOOL paused;
+@property (nonatomic, assign) BOOL menuOpen;
+@property (nonatomic, strong) UILabel *toast;
+@property (nonatomic, strong) UILabel *perfLabel;
+@end
+
+// Estatísticas de desempenho (zeradas a cada janela de ~2 s)
+typedef struct {
+    double windowStart;
+    double lastTimestamp;
+    int ticks, frames, extraFrames, skippedTicks, lateTicks, draws;
+    double emuSum, emuMax, drawSum, drawMax;
+    uint32_t underrunsAtStart;
+    uint32_t minAudio, maxAudio;
+} RFPerf;
+
+@implementation RFGameViewController {
+    RFPerf _perf;
+}
+
+- (instancetype)initWithPath:(NSString *)path {
+    if ((self = [super init])) {
+        _path = [path copy];
+    }
+    return self;
+}
+
+- (BOOL)prefersStatusBarHidden {
+    return YES;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor blackColor];
+
+    self.video = [[RFGLView alloc] initWithFrame:CGRectZero];
+    self.video.smooth = [[NSUserDefaults standardUserDefaults] boolForKey:@"RFSmooth"];
+    [self.view addSubview:self.video];
+
+    self.pad = [[RFTouchPad alloc] initWithFrame:self.view.bounds];
+    self.pad.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    __weak RFGameViewController *weakSelf = self;
+    self.pad.menuHandler = ^{ [weakSelf showMenu]; };
+    [self.view addSubview:self.pad];
+    [self updateTouchControls];
+
+    self.toast = [[UILabel alloc] init];
+    self.toast.backgroundColor = [UIColor colorWithWhite:0 alpha:0.7];
+    self.toast.textColor = [UIColor whiteColor];
+    self.toast.textAlignment = NSTextAlignmentCenter;
+    self.toast.font = [UIFont boldSystemFontOfSize:17];
+    self.toast.layer.cornerRadius = 10;
+    self.toast.clipsToBounds = YES;
+    self.toast.alpha = 0;
+    [self.view addSubview:self.toast];
+
+    self.perfLabel = [[UILabel alloc] init];
+    self.perfLabel.backgroundColor = [UIColor colorWithWhite:0 alpha:0.6];
+    self.perfLabel.textColor = [UIColor greenColor];
+    self.perfLabel.font = [UIFont fontWithName:@"Menlo" size:12] ?: [UIFont systemFontOfSize:12];
+    self.perfLabel.numberOfLines = 0;
+    self.perfLabel.userInteractionEnabled = NO;
+    self.perfLabel.hidden = ![[NSUserDefaults standardUserDefaults] boolForKey:@"RFShowPerf"];
+    [self.view addSubview:self.perfLabel];
+
+    NSString *error = nil;
+    if (![[RFCore shared] loadGameAtPath:self.path error:&error]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Erro" message:error preferredStyle:UIAlertControllerStyleAlert];
+            [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
+                [weakSelf dismissViewControllerAnimated:YES completion:nil];
+            }]];
+            [weakSelf presentViewController:a animated:YES completion:nil];
+        });
+        return;
+    }
+    [[RFAudio shared] startWithSampleRate:[RFCore shared].sampleRate];
+
+    [RFBluetooth shared].menuPressed = ^{ [weakSelf showMenu]; };
+
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+    [nc addObserver:self selector:@selector(willResign) name:UIApplicationWillResignActiveNotification object:nil];
+    [nc addObserver:self selector:@selector(didBecomeActive) name:UIApplicationDidBecomeActiveNotification object:nil];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (![RFCore shared].loaded || self.link) return;
+    self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick)];
+    [self.link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+    if ([[RFCore shared] hasStateSlot:0]) [self offerResume];
+}
+
+// Há um salvamento automático da última sessão: pergunta se quer continuar dele
+- (void)offerResume {
+    self.menuOpen = YES;
+    self.paused = YES;
+    NSString *when = [self describeDate:[[RFCore shared] dateForStateSlot:0]];
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Continuar de onde parou?"
+                                                               message:[NSString stringWithFormat:@"Há um salvamento automático de %@.", when]
+                                                        preferredStyle:UIAlertControllerStyleAlert];
+    __weak RFGameViewController *weakSelf = self;
+    [a addAction:[UIAlertAction actionWithTitle:@"Começar do início" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
+        [weakSelf resume];
+    }]];
+    [a addAction:[UIAlertAction actionWithTitle:@"Continuar" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+        if (![[RFCore shared] loadStateSlot:0]) [weakSelf showToast:@"Não foi possível carregar"];
+        [weakSelf resume];
+    }]];
+    [self presentViewController:a animated:YES completion:nil];
+}
+
+- (NSString *)describeDate:(NSDate *)date {
+    if (!date) return @"vazio";
+    static NSDateFormatter *fmt;
+    if (!fmt) {
+        fmt = [[NSDateFormatter alloc] init];
+        fmt.locale = [NSLocale localeWithLocaleIdentifier:@"pt_BR"];
+        fmt.dateFormat = @"dd/MM 'às' HH:mm";
+    }
+    return [fmt stringFromDate:date];
+}
+
+// Lista os slots para salvar (1 a 3) ou carregar (os que existem, incluindo o automático)
+- (void)showSlotsForSaving:(BOOL)saving {
+    RFCore *core = [RFCore shared];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:saving ? @"Salvar em qual slot?" : @"Carregar qual estado?"
+                                                                   message:nil
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak RFGameViewController *weakSelf = self;
+    for (int slot = saving ? 1 : 0; slot <= 3; slot++) {
+        NSDate *date = [core dateForStateSlot:slot];
+        if (!saving && !date) continue;
+        NSString *name = slot == 0 ? @"Automático" : [NSString stringWithFormat:@"Slot %d", slot];
+        NSString *title = [NSString stringWithFormat:@"%@ — %@", name, [self describeDate:date]];
+        [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            BOOL ok = saving ? [[RFCore shared] saveStateSlot:slot] : [[RFCore shared] loadStateSlot:slot];
+            NSString *msg = saving ? (ok ? @"Estado salvo no %@" : @"Não foi possível salvar") : (ok ? @"%@ carregado" : @"Não foi possível carregar");
+            [weakSelf showToast:[NSString stringWithFormat:msg, name]];
+            [weakSelf resume];
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Voltar" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) {
+        [weakSelf resume];
+    }]];
+    sheet.popoverPresentationController.sourceView = self.pad;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width - 60, 10, 50, 50);
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (BOOL)hasAnyState {
+    for (int slot = 0; slot <= 3; slot++) {
+        if ([[RFCore shared] hasStateSlot:slot]) return YES;
+    }
+    return NO;
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    CGSize s = self.view.bounds.size;
+    float aspect = [RFCore shared].aspectRatio > 0 ? [RFCore shared].aspectRatio : 4.0f / 3.0f;
+    CGRect r;
+    if (s.width > s.height) {
+        CGFloat h = s.height, w = h * aspect;
+        if (w > s.width) { w = s.width; h = w / aspect; }
+        r = CGRectMake((s.width - w) / 2.0, (s.height - h) / 2.0, w, h);
+    } else {
+        CGFloat w = s.width, h = w / aspect;
+        r = CGRectMake(0, s.height * 0.06, w, h);
+    }
+    self.video.frame = CGRectIntegral(r);
+    self.pad.gameRect = self.video.frame;
+    [self.pad setNeedsLayout];
+    self.toast.frame = CGRectMake((s.width - 320) / 2.0, 20, 320, 44);
+    self.perfLabel.frame = CGRectMake(8, 8, 300, 64);
+}
+
+// Ritmo guiado pelo áudio: a fila de som diz se estamos atrasados ou adiantados.
+// Atrasado -> roda um quadro extra sem desenhar (o jogo não fica lento e o som não picota).
+// Adiantado demais -> pula esta volta (evita latência de som crescendo).
+- (void)tick {
+    if (self.paused) {
+        _perf.lastTimestamp = 0;
+        return;
+    }
+    RFCore *core = [RFCore shared];
+    RFAudio *audio = [RFAudio shared];
+    double spf = core.sampleRate / core.fps;            // ~735 amostras por quadro
+    uint32_t queued = [audio bufferedFrames];
+
+    int runs = 1;
+    if (queued > spf * 6) runs = 0;
+    else if (queued < spf * 2.5) runs = 2;   // margem maior: absorve uma volta atrasada sem faltar som
+
+    double t0 = CACurrentMediaTime();
+    for (int i = 0; i < runs; i++) {
+        [core runFrameSkippingVideo:(i < runs - 1)];
+    }
+    double t1 = CACurrentMediaTime();
+    if (runs) [self.video drawFrame];
+    double t2 = CACurrentMediaTime();
+
+    [self recordPerfRuns:runs queued:queued emu:(t1 - t0) draw:(runs ? t2 - t1 : 0) timestamp:self.link.timestamp now:t2];
+}
+
+- (void)recordPerfRuns:(int)runs queued:(uint32_t)queued emu:(double)emu draw:(double)draw timestamp:(double)ts now:(double)now {
+    RFPerf *p = &_perf;
+    if (p->windowStart == 0) {
+        memset(p, 0, sizeof(*p));
+        p->windowStart = now;
+        p->underrunsAtStart = [[RFAudio shared] underruns];
+        p->minAudio = UINT32_MAX;
+    }
+    if (p->lastTimestamp > 0 && ts - p->lastTimestamp > 1.5 / 60.0) p->lateTicks++;
+    p->lastTimestamp = ts;
+    p->ticks++;
+    p->frames += runs;
+    if (runs == 2) p->extraFrames++;
+    if (runs == 0) p->skippedTicks++;
+    if (runs) {
+        p->draws++;
+        double perFrame = emu / runs;
+        p->emuSum += emu;
+        if (perFrame > p->emuMax) p->emuMax = perFrame;
+        p->drawSum += draw;
+        if (draw > p->drawMax) p->drawMax = draw;
+    }
+    if (queued < p->minAudio) p->minAudio = queued;
+    if (queued > p->maxAudio) p->maxAudio = queued;
+
+    double elapsed = now - p->windowStart;
+    if (elapsed < 2.0) return;
+
+    double emuAvg = p->frames ? p->emuSum * 1000.0 / p->frames : 0;
+    double drawAvg = p->draws ? p->drawSum * 1000.0 / p->draws : 0;
+    uint32_t underruns = [[RFAudio shared] underruns] - p->underrunsAtStart;
+    NSString *text = [NSString stringWithFormat:
+        @"tela %.1f/s  jogo %.1f q/s\nemu %.1f ms (máx %.1f)  gl %.1f ms (máx %.1f)\nextra %d  pulos %d  atrasos %d  som-falhas %u  fila %u-%u",
+        p->ticks / elapsed, p->frames / elapsed, emuAvg, p->emuMax * 1000.0, drawAvg, p->drawMax * 1000.0,
+        p->extraFrames, p->skippedTicks, p->lateTicks, underruns, p->minAudio == UINT32_MAX ? 0 : p->minAudio, p->maxAudio];
+    if (!self.perfLabel.hidden) self.perfLabel.text = text;
+    p->windowStart = 0;
+}
+
+- (void)updateTouchControls {
+    NSNumber *pref = [[NSUserDefaults standardUserDefaults] objectForKey:@"RFShowTouch"];
+    BOOL btReady = [RFBluetooth shared].connected && [RFBluetooth shared].hasMapping;
+    BOOL show = pref ? pref.boolValue : !btReady;
+    self.pad.controlsHidden = !show;
+}
+
+- (void)showToast:(NSString *)text {
+    self.toast.text = text;
+    self.toast.alpha = 1;
+    [UIView animateWithDuration:0.4 delay:1.5 options:0 animations:^{ self.toast.alpha = 0; } completion:nil];
+}
+
+#pragma mark Pausa / menu
+
+- (void)setPaused:(BOOL)paused {
+    _paused = paused;
+    _perf.windowStart = 0;
+    if (paused) {
+        rf_touch_mask = 0;
+        [[RFAudio shared] clear];
+    }
+}
+
+- (void)willResign {
+    self.paused = YES;
+    [[RFCore shared] saveSRAM];
+    [[RFCore shared] saveStateSlot:0];   // salvamento automático
+}
+
+- (void)didBecomeActive {
+    if (!self.menuOpen) self.paused = NO;
+}
+
+- (void)resume {
+    self.menuOpen = NO;
+    self.paused = NO;
+}
+
+- (void)showMenu {
+    if (self.menuOpen || !self.isViewLoaded || !self.view.window) return;
+    self.menuOpen = YES;
+    self.paused = YES;
+    RFCore *core = [RFCore shared];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:core.gameName message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak RFGameViewController *weakSelf = self;
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Continuar" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [weakSelf resume];
+    }]];
+    // O menu continua "aberto" (jogo pausado) enquanto a lista de slots aparece
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Salvar estado…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [weakSelf showSlotsForSaving:YES]; });
+    }]];
+    if ([self hasAnyState]) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"Carregar estado…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [weakSelf showSlotsForSaving:NO]; });
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Reiniciar jogo" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [[RFCore shared] reset];
+        [weakSelf resume];
+    }]];
+    NSString *touchTitle = self.pad.controlsHidden ? @"Mostrar controle na tela" : @"Esconder controle na tela";
+    [sheet addAction:[UIAlertAction actionWithTitle:touchTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        BOOL show = weakSelf.pad.controlsHidden;
+        [[NSUserDefaults standardUserDefaults] setBool:show forKey:@"RFShowTouch"];
+        weakSelf.pad.controlsHidden = !show;
+        [weakSelf resume];
+    }]];
+    NSString *filterTitle = self.video.smooth ? @"Imagem: nítida (pixels)" : @"Imagem: suavizada";
+    [sheet addAction:[UIAlertAction actionWithTitle:filterTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        weakSelf.video.smooth = !weakSelf.video.smooth;
+        [[NSUserDefaults standardUserDefaults] setBool:weakSelf.video.smooth forKey:@"RFSmooth"];
+        [weakSelf resume];
+    }]];
+    NSString *perfTitle = self.perfLabel.hidden ? @"Mostrar desempenho" : @"Esconder desempenho";
+    [sheet addAction:[UIAlertAction actionWithTitle:perfTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        weakSelf.perfLabel.hidden = !weakSelf.perfLabel.hidden;
+        [[NSUserDefaults standardUserDefaults] setBool:!weakSelf.perfLabel.hidden forKey:@"RFShowPerf"];
+        [weakSelf resume];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Sair do jogo" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+        [weakSelf quit];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) {
+        [weakSelf resume];
+    }]];
+    sheet.popoverPresentationController.sourceView = self.pad;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width - 60, 10, 50, 50);
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)quit {
+    [self.link invalidate];
+    self.link = nil;
+    [RFBluetooth shared].menuPressed = nil;
+    [[RFAudio shared] stop];
+    [[RFCore shared] saveStateSlot:0];   // salvamento automático ao sair
+    [[RFCore shared] unload];
+    rf_touch_mask = 0;
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+@end
+
+#pragma mark - Tela do controle Bluetooth
+
+@interface RFControllerViewController : UITableViewController <RFBluetoothDelegate>
+@property (nonatomic, strong) NSTimer *liveTimer;
+@property (nonatomic, strong) NSMutableArray *logLines;
+@end
+
+@implementation RFControllerViewController
+
+- (instancetype)init {
+    return [super initWithStyle:UITableViewStyleGrouped];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"Controle Bluetooth";
+    self.logLines = [NSMutableArray array];
+    [RFBluetooth shared].delegate = self;
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    self.liveTimer = [NSTimer scheduledTimerWithTimeInterval:0.1 target:self selector:@selector(liveTick) userInfo:nil repeats:YES];
+    [self.tableView reloadData];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [self.liveTimer invalidate];
+    self.liveTimer = nil;
+    if ([RFBluetooth shared].calibrating) [[RFBluetooth shared] cancelCalibration];
+}
+
+- (void)liveTick {
+    // Atualiza só a linha do teste ao vivo
+    if (![RFBluetooth shared].connected) return;
+    NSIndexPath *ip = [NSIndexPath indexPathForRow:1 inSection:0];
+    UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:ip];
+    if (cell) cell.detailTextLabel.text = [self liveText];
+}
+
+- (NSString *)liveText {
+    return [self pressedText];
+}
+
+- (NSString *)pressedText {
+    uint32_t m = rf_pad_mask;
+    NSMutableArray *names = [NSMutableArray array];
+    struct { uint32_t bit; __unsafe_unretained NSString *name; } map[] = {
+        {RF_UP, @"↑"}, {RF_DOWN, @"↓"}, {RF_LEFT, @"←"}, {RF_RIGHT, @"→"},
+        {RF_MD_A, @"A"}, {RF_MD_B, @"B"}, {RF_MD_C, @"C"}, {RF_MD_START, @"Start"},
+        {RF_MD_X, @"X"}, {RF_MD_Y, @"Y"}, {RF_MD_Z, @"Z"}, {RF_MD_MODE, @"Mode"},
+    };
+    for (unsigned i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
+        if (m & map[i].bit) [names addObject:map[i].name];
+    }
+    return names.count ? [names componentsJoinedByString:@" "] : @"(nada apertado)";
+}
+
+- (void)bluetoothDidChange {
+    [self.tableView reloadData];
+}
+
+- (void)bluetoothLog:(NSString *)text {
+}
+
+// Seções: 0 status, 1 ações, 2 dispositivos encontrados
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    return 3;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    return @[@"Estado", @"Ações", @"Dispositivos encontrados"][section];
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    if (section == 1) {
+        return @"Para parear: desligue o Bluetooth do iOS em Ajustes, coloque o controle em modo de pareamento e toque em Procurar. "
+               @"Depois de conectado, use \"Configurar botões\" uma vez; o mapeamento fica salvo.";
+    }
+    return nil;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    RFBluetooth *bt = [RFBluetooth shared];
+    if (section == 0) return bt.connected ? 2 : 1;
+    if (section == 1) return bt.calibrating ? 2 : (bt.connected ? 3 : 2);
+    return MAX(1, bt.deviceCount);
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
+    cell.textLabel.numberOfLines = 0;
+    cell.detailTextLabel.numberOfLines = 0;
+    RFBluetooth *bt = [RFBluetooth shared];
+
+    if (indexPath.section == 0) {
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        if (indexPath.row == 0) {
+            cell.textLabel.text = bt.status;
+            cell.detailTextLabel.text = bt.connected ? (bt.hasMapping ? @"Botões configurados" : @"Botões ainda não configurados") : nil;
+        } else {
+            cell.textLabel.text = @"Teste ao vivo";
+            cell.detailTextLabel.text = [self liveText];
+            cell.detailTextLabel.font = [UIFont boldSystemFontOfSize:20];
+        }
+        return cell;
+    }
+
+    if (indexPath.section == 1) {
+        cell.textLabel.textColor = RFAccent();
+        if (bt.calibrating) {
+            if (indexPath.row == 0) {
+                cell.textLabel.text = [NSString stringWithFormat:@"Aperte: %@", RFActionName(bt.calibratingAction)];
+                cell.textLabel.font = [UIFont boldSystemFontOfSize:24];
+                cell.textLabel.textColor = [UIColor blackColor];
+                cell.detailTextLabel.text = @"Solte o botão depois de apertar. Toque aqui para pular este.";
+            } else {
+                if (bt.hasMapping) {
+                    cell.textLabel.text = @"Concluir (pular os opcionais)";
+                } else {
+                    cell.textLabel.text = @"Cancelar configuração";
+                    cell.textLabel.textColor = [UIColor redColor];
+                }
+            }
+            return cell;
+        }
+        NSArray *titles = bt.connected ? @[@"Procurar controles", @"Configurar botões", @"Esquecer este controle"]
+                                       : @[@"Procurar controles", @"Esquecer controle salvo"];
+        cell.textLabel.text = titles[indexPath.row];
+        if ([titles[indexPath.row] hasPrefix:@"Esquecer"]) cell.textLabel.textColor = [UIColor redColor];
+        return cell;
+    }
+
+    if (bt.deviceCount == 0) {
+        cell.textLabel.text = @"Nenhum ainda";
+        cell.textLabel.textColor = [UIColor grayColor];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    } else {
+        cell.textLabel.text = [bt deviceTitleAtIndex:indexPath.row];
+        cell.detailTextLabel.text = @"Toque para conectar";
+    }
+    return cell;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    RFBluetooth *bt = [RFBluetooth shared];
+    if (indexPath.section == 0) return 60;
+    if (indexPath.section == 1 && bt.calibrating && indexPath.row == 0) return 80;
+    return 50;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    RFBluetooth *bt = [RFBluetooth shared];
+    if (indexPath.section == 1) {
+        if (bt.calibrating) {
+            if (indexPath.row == 0) [bt skipCalibrationStep];
+            else [bt cancelCalibration];
+            return;
+        }
+        if (indexPath.row == 0) [bt scan];
+        else if (bt.connected && indexPath.row == 1) [bt startCalibration];
+        else [bt forgetController];
+    } else if (indexPath.section == 2 && bt.deviceCount > 0) {
+        [bt connectDeviceAtIndex:indexPath.row];
+    }
+}
+
+@end
+
+#pragma mark - Biblioteca de jogos
+
+@interface RFLibraryViewController : UITableViewController <RFBluetoothDelegate>
+@property (nonatomic, strong) NSArray *roms;
+@end
+
+@implementation RFLibraryViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"Retro16";
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Controle"
+                                                                              style:UIBarButtonItemStylePlain
+                                                                             target:self
+                                                                             action:@selector(openController)];
+    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh
+                                                                                          target:self
+                                                                                          action:@selector(reload)];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [RFBluetooth shared].delegate = self;
+    [self reload];
+}
+
+- (void)bluetoothDidChange {
+    [self updatePrompt];
+}
+
+- (void)updatePrompt {
+    RFBluetooth *bt = [RFBluetooth shared];
+    self.navigationItem.prompt = bt.connected ? [NSString stringWithFormat:@"🎮 %@", bt.connectedName] : nil;
+}
+
+- (void)reload {
+    NSArray *exts = @[@"md", @"gen", @"bin", @"smd", @"sms", @"gg", @"sg", @"68k"];
+    NSMutableArray *list = [NSMutableArray array];
+    NSString *dir = RFDir(@"roms");
+    for (NSString *f in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil]) {
+        if ([exts containsObject:f.pathExtension.lowercaseString]) [list addObject:f];
+    }
+    self.roms = [list sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+    [self updatePrompt];
+    [self.tableView reloadData];
+}
+
+- (void)openController {
+    [self.navigationController pushViewController:[[RFControllerViewController alloc] init] animated:YES];
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return self.roms.count;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    if (self.roms.count) return nil;
+    return [NSString stringWithFormat:@"Nenhum jogo ainda. Copie as ROMs (.md, .gen, .bin, .sms, .gg) para:\n%@", RFDir(@"roms")];
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"rom"];
+    if (!cell) {
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"rom"];
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    }
+    NSString *f = self.roms[indexPath.row];
+    cell.textLabel.text = f.stringByDeletingPathExtension;
+    NSString *ext = f.pathExtension.lowercaseString;
+    cell.detailTextLabel.text = [@[@"sms"] containsObject:ext] ? @"Master System" : ([ext isEqualToString:@"gg"] ? @"Game Gear" : @"Mega Drive");
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    NSString *path = [RFDir(@"roms") stringByAppendingPathComponent:self.roms[indexPath.row]];
+    RFGameViewController *game = [[RFGameViewController alloc] initWithPath:path];
+    [self presentViewController:game animated:YES completion:nil];
+}
+
+@end
+
+#pragma mark - App
+
+@interface RFAppDelegate : UIResponder <UIApplicationDelegate>
+@property (nonatomic, strong) UIWindow *window;
+@end
+
+@implementation RFAppDelegate
+
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[RFLibraryViewController alloc] initWithStyle:UITableViewStylePlain]];
+    nav.navigationBar.tintColor = RFAccent();
+    self.window.rootViewController = nav;
+    [self.window makeKeyAndVisible];
+    application.idleTimerDisabled = YES;
+    [[RFBluetooth shared] start];
+    return YES;
+}
+
+- (void)applicationDidEnterBackground:(UIApplication *)application {
+    [[RFCore shared] saveSRAM];
+}
+
+- (void)applicationWillTerminate:(UIApplication *)application {
+    [[RFCore shared] unload];
+    [[RFBluetooth shared] stop];
+}
+
+@end
+
+int main(int argc, char *argv[]) {
+    @autoreleasepool {
+        return UIApplicationMain(argc, argv, nil, NSStringFromClass([RFAppDelegate class]));
+    }
+}

@@ -1,0 +1,394 @@
+#import "RF.h"
+#include "libretro.h"
+
+volatile uint32_t rf_touch_mask = 0;
+volatile uint32_t rf_pad_mask = 0;
+
+NSString *RFBaseDir(void) {
+    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    NSString *base = [docs stringByAppendingPathComponent:@"Retro16"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:base withIntermediateDirectories:YES attributes:nil error:nil];
+    return base;
+}
+
+void RFAppendLog(NSString *file, NSString *line) {
+    @synchronized ([NSFileManager class]) {
+    static NSDateFormatter *fmt;
+    if (!fmt) {
+        fmt = [[NSDateFormatter alloc] init];
+        fmt.dateFormat = @"HH:mm:ss.SSS";
+    }
+    NSString *path = [RFBaseDir() stringByAppendingPathComponent:file];
+    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
+    if ([attrs fileSize] > 200 * 1024) [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+    NSString *text = [NSString stringWithFormat:@"%@  %@\n", [fmt stringFromDate:[NSDate date]], line];
+    FILE *f = fopen(path.fileSystemRepresentation, "a");
+    if (!f) return;
+    fputs(text.UTF8String, f);
+    fclose(f);
+    }
+}
+
+NSString *RFDir(NSString *name) {
+    NSString *dir = [RFBaseDir() stringByAppendingPathComponent:name];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    return dir;
+}
+
+#pragma mark - Callbacks do libretro
+
+static char rf_system_dir[1024];
+static char rf_save_dir[1024];
+
+static const void *rf_frame_data = NULL;
+static unsigned rf_frame_width = 0, rf_frame_height = 0;
+static size_t rf_frame_pitch = 0;
+static float rf_aspect = 4.0f / 3.0f;
+static bool rf_skip_video = false;
+
+static bool rf_environment(unsigned cmd, void *data) {
+    switch (cmd) {
+        case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
+            return *(const enum retro_pixel_format *)data == RETRO_PIXEL_FORMAT_RGB565;
+        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
+            *(const char **)data = rf_system_dir;
+            return true;
+        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
+            *(const char **)data = rf_save_dir;
+            return true;
+        case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
+            return true;
+        case RETRO_ENVIRONMENT_GET_CAN_DUPE:
+            *(bool *)data = true;
+            return true;
+        case RETRO_ENVIRONMENT_SET_GEOMETRY: {
+            const struct retro_game_geometry *g = data;
+            if (g->aspect_ratio > 0) rf_aspect = g->aspect_ratio;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: {
+            const struct retro_system_av_info *av = data;
+            if (av->geometry.aspect_ratio > 0) rf_aspect = av->geometry.aspect_ratio;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
+            // bit 0 = vídeo, bit 1 = áudio. Pular o vídeo poupa a renderização do VDP.
+            *(int *)data = rf_skip_video ? 2 : 3;
+            return true;
+        default:
+            return false;   // opções do core ficam no padrão
+    }
+}
+
+static void rf_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch) {
+    if (!data) return;   // quadro repetido
+    rf_frame_data = data;
+    rf_frame_width = width;
+    rf_frame_height = height;
+    rf_frame_pitch = pitch;
+}
+
+static void rf_audio_sample(int16_t left, int16_t right) {
+    int16_t s[2] = {left, right};
+    [[RFAudio shared] pushSamples:s frames:1];
+}
+
+static size_t rf_audio_sample_batch(const int16_t *data, size_t frames) {
+    [[RFAudio shared] pushSamples:data frames:frames];
+    return frames;
+}
+
+static void rf_input_poll(void) {
+}
+
+static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, unsigned id) {
+    if (port != 0 || device != RETRO_DEVICE_JOYPAD) return 0;
+    uint32_t mask = rf_touch_mask | rf_pad_mask;
+    if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return (int16_t)(mask & 0xFFFF);
+    return (mask >> id) & 1;
+}
+
+#pragma mark - RFCore
+
+@interface RFCore ()
+@property (nonatomic, readwrite) double fps;
+@property (nonatomic, readwrite) double sampleRate;
+@property (nonatomic, readwrite) BOOL loaded;
+@property (nonatomic, readwrite, copy) NSString *gameName;
+@property (nonatomic, assign) BOOL initialized;
+@end
+
+@implementation RFCore
+
++ (instancetype)shared {
+    static RFCore *core;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ core = [[RFCore alloc] init]; });
+    return core;
+}
+
+- (float)aspectRatio {
+    return rf_aspect;
+}
+
+- (void)ensureInit {
+    if (self.initialized) return;
+    strlcpy(rf_system_dir, RFDir(@"system").fileSystemRepresentation, sizeof(rf_system_dir));
+    strlcpy(rf_save_dir, RFDir(@"saves").fileSystemRepresentation, sizeof(rf_save_dir));
+    retro_set_environment(rf_environment);
+    retro_set_video_refresh(rf_video_refresh);
+    retro_set_audio_sample(rf_audio_sample);
+    retro_set_audio_sample_batch(rf_audio_sample_batch);
+    retro_set_input_poll(rf_input_poll);
+    retro_set_input_state(rf_input_state);
+    retro_init();
+    self.initialized = YES;
+}
+
+- (NSString *)sramPath {
+    return [RFDir(@"saves") stringByAppendingPathComponent:[self.gameName stringByAppendingPathExtension:@"srm"]];
+}
+
+- (NSString *)statePath:(int)slot {
+    NSString *file = [NSString stringWithFormat:@"%@.state%d", self.gameName, slot];
+    return [RFDir(@"states") stringByAppendingPathComponent:file];
+}
+
+- (BOOL)loadGameAtPath:(NSString *)path error:(NSString **)error {
+    [self ensureInit];
+    if (self.loaded) [self unload];
+
+    struct retro_game_info info;
+    memset(&info, 0, sizeof(info));
+    info.path = path.fileSystemRepresentation;
+    if (!retro_load_game(&info)) {
+        if (error) *error = @"O core não conseguiu carregar este arquivo.";
+        return NO;
+    }
+
+    struct retro_system_av_info av;
+    memset(&av, 0, sizeof(av));
+    retro_get_system_av_info(&av);
+    self.fps = av.timing.fps > 0 ? av.timing.fps : 60.0;
+    self.sampleRate = av.timing.sample_rate > 0 ? av.timing.sample_rate : 44100.0;
+    if (av.geometry.aspect_ratio > 0) rf_aspect = av.geometry.aspect_ratio;
+    else if (av.geometry.base_height) rf_aspect = (float)av.geometry.base_width / av.geometry.base_height;
+
+    self.gameName = path.lastPathComponent.stringByDeletingPathExtension;
+    self.loaded = YES;
+    rf_frame_data = NULL;
+
+    // Restaura a SRAM (saves internos do cartucho)
+    NSData *sram = [NSData dataWithContentsOfFile:[self sramPath]];
+    size_t size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    void *mem = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    if (sram && mem && size) {
+        memcpy(mem, sram.bytes, MIN(size, sram.length));
+    }
+    return YES;
+}
+
+- (void)runFrame {
+    [self runFrameSkippingVideo:NO];
+}
+
+- (void)runFrameSkippingVideo:(BOOL)skip {
+    if (!self.loaded) return;
+    rf_skip_video = skip;
+    retro_run();
+    rf_skip_video = false;
+}
+
+- (void)reset {
+    if (self.loaded) retro_reset();
+}
+
+- (void)saveSRAM {
+    if (!self.loaded) return;
+    size_t size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    void *mem = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    if (!mem || !size) return;
+    // Só grava se houver algo diferente de zero (evita criar arquivos vazios)
+    const uint8_t *p = mem;
+    BOOL any = NO;
+    for (size_t i = 0; i < size; i++) {
+        if (p[i] != 0 && p[i] != 0xFF) { any = YES; break; }
+    }
+    if (any) [[NSData dataWithBytes:mem length:size] writeToFile:[self sramPath] atomically:YES];
+}
+
+- (void)unload {
+    if (!self.loaded) return;
+    [self saveSRAM];
+    retro_unload_game();
+    self.loaded = NO;
+    rf_frame_data = NULL;
+}
+
+- (BOOL)saveStateSlot:(int)slot {
+    if (!self.loaded) return NO;
+    size_t size = retro_serialize_size();
+    if (!size) return NO;
+    NSMutableData *data = [NSMutableData dataWithLength:size];
+    if (!retro_serialize(data.mutableBytes, size)) return NO;
+    return [data writeToFile:[self statePath:slot] atomically:YES];
+}
+
+- (BOOL)loadStateSlot:(int)slot {
+    if (!self.loaded) return NO;
+    NSData *data = [NSData dataWithContentsOfFile:[self statePath:slot]];
+    if (!data) return NO;
+    return retro_unserialize(data.bytes, data.length);
+}
+
+- (NSDate *)dateForStateSlot:(int)slot {
+    if (!self.loaded) return nil;
+    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:[self statePath:slot] error:nil];
+    return attrs.fileModificationDate;
+}
+
+- (BOOL)hasStateSlot:(int)slot {
+    return self.loaded && [[NSFileManager defaultManager] fileExistsAtPath:[self statePath:slot]];
+}
+
+- (const void *)frameData:(unsigned *)width height:(unsigned *)height pitch:(size_t *)pitch {
+    if (width) *width = rf_frame_width;
+    if (height) *height = rf_frame_height;
+    if (pitch) *pitch = rf_frame_pitch;
+    return rf_frame_data;
+}
+
+@end
+
+#pragma mark - Áudio (RemoteIO + buffer circular)
+
+#import <AudioToolbox/AudioToolbox.h>
+#import <AVFoundation/AVFoundation.h>
+
+#define RF_RING_FRAMES 16384   // ~370 ms a 44,1 kHz
+static int16_t rf_ring[RF_RING_FRAMES * 2];
+static volatile uint32_t rf_ring_write = 0;   // em quadros (estéreo)
+static volatile uint32_t rf_ring_read = 0;
+static volatile uint32_t rf_underruns = 0;
+static volatile int rf_audio_primed = 0;   // só conta falhas depois que o som começou
+
+static OSStatus rf_render(void *ref, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *ts,
+                          UInt32 bus, UInt32 frames, AudioBufferList *io) {
+    int16_t *out = io->mBuffers[0].mData;
+    uint32_t r = rf_ring_read;
+    uint32_t w = rf_ring_write;
+    __sync_synchronize();
+    uint32_t available = w - r;
+    uint32_t n = MIN(available, frames);
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t idx = (r + i) % RF_RING_FRAMES;
+        out[i * 2] = rf_ring[idx * 2];
+        out[i * 2 + 1] = rf_ring[idx * 2 + 1];
+    }
+    if (n < frames) {
+        memset(out + n * 2, 0, (frames - n) * 4);   // faltou som: silêncio
+        if (rf_audio_primed) rf_underruns++;
+    } else {
+        rf_audio_primed = 1;
+    }
+    __sync_synchronize();
+    rf_ring_read = r + n;
+    return noErr;
+}
+
+@interface RFAudio ()
+@property (nonatomic, assign) AudioComponentInstance unit;
+@property (nonatomic, assign) BOOL running;
+@end
+
+@implementation RFAudio
+
++ (instancetype)shared {
+    static RFAudio *audio;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ audio = [[RFAudio alloc] init]; });
+    return audio;
+}
+
+- (void)startWithSampleRate:(double)rate {
+    [self stop];
+    [self clear];
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    [session setCategory:AVAudioSessionCategoryPlayback error:nil];
+    [session setPreferredIOBufferDuration:0.012 error:nil];
+    [session setActive:YES error:nil];
+
+    AudioComponentDescription desc = {0};
+    desc.componentType = kAudioUnitType_Output;
+    desc.componentSubType = kAudioUnitSubType_RemoteIO;
+    desc.componentManufacturer = kAudioUnitManufacturer_Apple;
+    AudioComponent comp = AudioComponentFindNext(NULL, &desc);
+    AudioComponentInstance unit = NULL;
+    if (!comp || AudioComponentInstanceNew(comp, &unit) != noErr) return;
+
+    AudioStreamBasicDescription fmt = {0};
+    fmt.mSampleRate = rate;
+    fmt.mFormatID = kAudioFormatLinearPCM;
+    fmt.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+    fmt.mChannelsPerFrame = 2;
+    fmt.mBitsPerChannel = 16;
+    fmt.mBytesPerFrame = 4;
+    fmt.mFramesPerPacket = 1;
+    fmt.mBytesPerPacket = 4;
+    AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &fmt, sizeof(fmt));
+
+    AURenderCallbackStruct cb = { rf_render, NULL };
+    AudioUnitSetProperty(unit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cb, sizeof(cb));
+
+    if (AudioUnitInitialize(unit) == noErr && AudioOutputUnitStart(unit) == noErr) {
+        self.unit = unit;
+        self.running = YES;
+    } else {
+        AudioComponentInstanceDispose(unit);
+    }
+}
+
+- (void)stop {
+    if (!self.unit) return;
+    AudioOutputUnitStop(self.unit);
+    AudioUnitUninitialize(self.unit);
+    AudioComponentInstanceDispose(self.unit);
+    self.unit = NULL;
+    self.running = NO;
+}
+
+- (void)clear {
+    rf_ring_read = 0;
+    rf_ring_write = 0;
+    rf_audio_primed = 0;
+}
+
+- (uint32_t)bufferedFrames {
+    uint32_t w = rf_ring_write;
+    uint32_t r = rf_ring_read;
+    return w - r;
+}
+
+- (uint32_t)underruns {
+    return rf_underruns;
+}
+
+- (void)pushSamples:(const int16_t *)data frames:(size_t)frames {
+    uint32_t w = rf_ring_write;
+    uint32_t r = rf_ring_read;
+    uint32_t used = w - r;
+    // Mantém a latência baixa: se o buffer encher demais, descarta o excesso
+    uint32_t limit = RF_RING_FRAMES / 2;   // o ritmo do jogo já segura a fila; isto é só proteção
+    if (used > limit) return;
+    uint32_t space = RF_RING_FRAMES - used;
+    uint32_t n = (uint32_t)MIN(frames, space);
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t idx = (w + i) % RF_RING_FRAMES;
+        rf_ring[idx * 2] = data[i * 2];
+        rf_ring[idx * 2 + 1] = data[i * 2 + 1];
+    }
+    __sync_synchronize();
+    rf_ring_write = w + n;
+}
+
+@end

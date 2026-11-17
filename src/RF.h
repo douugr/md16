@@ -1,0 +1,133 @@
+// Retro16 — frontend libretro mínimo para iPad com iOS 8 (armv7) + Genesis Plus GX
+#import <UIKit/UIKit.h>
+#include <stdint.h>
+
+#pragma mark - Entrada (bits no formato RetroPad do libretro)
+
+// IDs RETRO_DEVICE_ID_JOYPAD_*: B=0 Y=1 SELECT=2 START=3 UP=4 DOWN=5 LEFT=6 RIGHT=7 A=8 X=9 L=10 R=11
+#define RF_BIT(id) (1u << (id))
+// No Mega Drive (Genesis Plus GX): A=Y, B=B, C=A, X=L, Y=X, Z=R, MODE=SELECT
+#define RF_MD_A      RF_BIT(1)
+#define RF_MD_B      RF_BIT(0)
+#define RF_MD_C      RF_BIT(8)
+#define RF_MD_X      RF_BIT(10)
+#define RF_MD_Y      RF_BIT(9)
+#define RF_MD_Z      RF_BIT(11)
+#define RF_MD_MODE   RF_BIT(2)
+#define RF_MD_START  RF_BIT(3)
+#define RF_UP        RF_BIT(4)
+#define RF_DOWN      RF_BIT(5)
+#define RF_LEFT      RF_BIT(6)
+#define RF_RIGHT     RF_BIT(7)
+
+// Estado atual de cada fonte de entrada (lido pelo core a cada quadro)
+extern volatile uint32_t rf_touch_mask;
+extern volatile uint32_t rf_pad_mask;
+
+// Pastas: Documents/Retro16/{roms,saves,states,system}
+NSString *RFBaseDir(void);
+NSString *RFDir(NSString *name);
+// Acrescenta uma linha com horário em Documents/Retro16/<file> (diagnóstico; arquivo limitado a ~200 KB)
+void RFAppendLog(NSString *file, NSString *line);
+
+#pragma mark - Core
+
+@interface RFCore : NSObject
++ (instancetype)shared;
+@property (nonatomic, readonly) double fps;
+@property (nonatomic, readonly) double sampleRate;
+@property (nonatomic, readonly) float aspectRatio;
+@property (nonatomic, readonly) BOOL loaded;
+@property (nonatomic, readonly, copy) NSString *gameName;
+- (BOOL)loadGameAtPath:(NSString *)path error:(NSString **)error;
+- (void)runFrame;
+// Roda um quadro; com skip=YES o core não desenha o vídeo (só emula e gera áudio)
+- (void)runFrameSkippingVideo:(BOOL)skip;
+- (void)reset;
+- (void)unload;
+- (void)saveSRAM;
+- (BOOL)saveStateSlot:(int)slot;
+- (BOOL)loadStateSlot:(int)slot;
+- (BOOL)hasStateSlot:(int)slot;
+// Data em que o estado foi salvo (nil se o slot está vazio). Slot 0 = automático, 1 a 3 = manuais.
+- (NSDate *)dateForStateSlot:(int)slot;
+// Último quadro de vídeo (RGB565). Válido até a próxima chamada de runFrame.
+- (const void *)frameData:(unsigned *)width height:(unsigned *)height pitch:(size_t *)pitch;
+@end
+
+#pragma mark - Áudio
+
+@interface RFAudio : NSObject
++ (instancetype)shared;
+- (void)startWithSampleRate:(double)rate;
+- (void)stop;
+- (void)clear;
+- (void)pushSamples:(const int16_t *)data frames:(size_t)frames;
+// Quadros de áudio na fila esperando para tocar
+- (uint32_t)bufferedFrames;
+// Quantas vezes o som ficou sem dados (contador desde o início)
+- (uint32_t)underruns;
+@end
+
+#pragma mark - Vídeo
+
+@interface RFGLView : UIView
+@property (nonatomic, assign) BOOL smooth;
+- (void)drawFrame;   // envia o último quadro do core para a tela
+@end
+
+#pragma mark - Controle na tela
+
+@interface RFTouchPad : UIView
+@property (nonatomic, copy) void (^menuHandler)(void);
+@property (nonatomic, assign) BOOL controlsHidden;   // esconde direcional/botões (fica só o botão de menu)
+@property (nonatomic, assign) CGRect gameRect;      // área do vídeo (para posicionar os controles)
+@end
+
+#pragma mark - Controle Bluetooth (BTstack)
+
+typedef NS_ENUM(NSInteger, RFAction) {
+    RFActionUp = 0, RFActionDown, RFActionLeft, RFActionRight,
+    RFActionA, RFActionB, RFActionC, RFActionStart,
+    RFActionX, RFActionY, RFActionZ, RFActionMode,
+    RFActionMenu,
+    RFActionCount
+};
+
+NSString *RFActionName(RFAction action);
+
+@protocol RFBluetoothDelegate <NSObject>
+@optional
+- (void)bluetoothDidChange;
+- (void)bluetoothLog:(NSString *)text;
+@end
+
+@interface RFBluetooth : NSObject
++ (instancetype)shared;
+@property (nonatomic, weak) id<RFBluetoothDelegate> delegate;
+@property (nonatomic, readonly, copy) NSString *status;
+@property (nonatomic, readonly) BOOL available;     // BTdaemon respondeu
+@property (nonatomic, readonly) BOOL connected;
+@property (nonatomic, readonly) BOOL hasMapping;
+@property (nonatomic, readonly, copy) NSString *connectedName;
+@property (nonatomic, copy) void (^menuPressed)(void);
+- (void)start;
+// Desliga o rádio e fecha a conexão com o BTdaemon (ao encerrar o app)
+- (void)stop;
+// Últimas linhas do registro de Bluetooth (mais recente por último)
+- (NSArray<NSString *> *)recentLog;
+// Último relatório bruto do controle, em hexadecimal (diagnóstico)
+- (NSString *)lastReportHex;
+- (void)scan;
+- (NSInteger)deviceCount;
+- (NSString *)deviceTitleAtIndex:(NSInteger)index;
+- (void)connectDeviceAtIndex:(NSInteger)index;
+- (void)disconnect;
+- (void)forgetController;
+// Assistente de mapeamento
+@property (nonatomic, readonly) BOOL calibrating;
+@property (nonatomic, readonly) RFAction calibratingAction;
+- (void)startCalibration;
+- (void)skipCalibrationStep;
+- (void)cancelCalibration;
+@end
