@@ -28,12 +28,21 @@ typedef struct {
     double lastTimestamp;
     int ticks, frames, extraFrames, skippedTicks, lateTicks, draws;
     double emuSum, emuMax, drawSum, drawMax;
+    double inputSum, inputMax;
+    int inputs, aheadFrames;
     uint32_t underrunsAtStart;
     uint32_t minAudio, maxAudio;
 } RFPerf;
 
 @implementation RFGameViewController {
     RFPerf _perf;
+    uint32_t _lastInputSeq;
+    double _aheadCost;          // custo médio (ms) de um quadro com run-ahead
+    double _aheadPausedUntil;   // run-ahead suspenso até este instante (iPad não deu conta)
+    double _lastTickStamp;      // horário de tela da volta anterior
+    BOOL _lastTickAhead;        // a volta anterior usou run-ahead?
+    int _aheadLate;             // voltas com run-ahead que perderam o quadro
+    double _aheadLateWindow;    // início da janela de contagem
 }
 
 - (instancetype)initWithPath:(NSString *)path {
@@ -195,7 +204,7 @@ typedef struct {
     self.pad.gameRect = self.video.frame;
     [self.pad setNeedsLayout];
     self.toast.frame = CGRectMake((s.width - 320) / 2.0, 20, 320, 44);
-    self.perfLabel.frame = CGRectMake(8, 8, 300, 64);
+    self.perfLabel.frame = CGRectMake(8, 8, 360, 84);
 }
 
 // Ritmo guiado pelo áudio: a fila de som diz se estamos atrasados ou adiantados.
@@ -204,6 +213,7 @@ typedef struct {
 - (void)tick {
     if (self.paused) {
         _perf.lastTimestamp = 0;
+        _lastTickStamp = 0;
         return;
     }
     RFCore *core = [RFCore shared];
@@ -216,14 +226,65 @@ typedef struct {
     else if (queued < spf * 2) runs = 2;   // fila curta: menos atraso entre o jogo e o som
 
     double t0 = CACurrentMediaTime();
+    // Run-ahead só é suspenso se fizer o iPad perder quadros de verdade
+    double stamp = self.link.timestamp;
+    if (_lastTickAhead && _lastTickStamp > 0 && stamp - _lastTickStamp > 1.5 / 60.0) {
+        if (t0 - _aheadLateWindow > 2.0) {
+            _aheadLateWindow = t0;
+            _aheadLate = 0;
+        }
+        if (++_aheadLate >= 3) {
+            _aheadPausedUntil = t0 + 5.0;
+            _aheadLate = 0;
+        }
+    }
+    _lastTickStamp = stamp;
+    // Quanto tempo o último botão apertado esperou até este quadro usá-lo
+    uint32_t seq = rf_input_seq;
+    if (runs && seq != _lastInputSeq) {
+        _lastInputSeq = seq;
+        [self recordInputAge:t0 - rf_input_changed_at];
+    }
+    BOOL ahead = NO;
     for (int i = 0; i < runs; i++) {
-        [core runFrameSkippingVideo:(i < runs - 1)];
+        BOOL last = (i == runs - 1);
+        if (last && [self runAheadActive:t0]) {
+            double a0 = CACurrentMediaTime();
+            ahead = [core runFrameWithRunAhead];
+            double cost = (CACurrentMediaTime() - a0) * 1000.0;
+            _aheadCost = _aheadCost ? _aheadCost * 0.9 + cost * 0.1 : cost;
+            // Perto de estourar os 16,7 ms do quadro: desliga por uns segundos e tenta de novo
+            if (_aheadCost > 14.5) {
+                _aheadPausedUntil = t0 + 5.0;
+                _aheadCost = 0;
+            }
+        } else {
+            [core runFrameSkippingVideo:!last];
+        }
     }
     double t1 = CACurrentMediaTime();
     if (runs) [self.video drawFrame];
     double t2 = CACurrentMediaTime();
 
+    if (ahead) _perf.aheadFrames++;
+    _lastTickAhead = ahead;
     [self recordPerfRuns:runs queued:queued emu:(t1 - t0) draw:(runs ? t2 - t1 : 0) timestamp:self.link.timestamp now:t2];
+}
+
+- (BOOL)runAheadEnabled {
+    NSNumber *pref = [[NSUserDefaults standardUserDefaults] objectForKey:@"RFRunAhead"];
+    return pref ? pref.boolValue : YES;
+}
+
+- (BOOL)runAheadActive:(double)now {
+    return [self runAheadEnabled] && now >= _aheadPausedUntil;
+}
+
+- (void)recordInputAge:(double)age {
+    if (age < 0 || age > 0.25) return;   // fora disso não é uma medida útil (pausa, menu...)
+    _perf.inputs++;
+    _perf.inputSum += age;
+    if (age > _perf.inputMax) _perf.inputMax = age;
 }
 
 - (void)recordPerfRuns:(int)runs queued:(uint32_t)queued emu:(double)emu draw:(double)draw timestamp:(double)ts now:(double)now {
@@ -257,11 +318,18 @@ typedef struct {
     double emuAvg = p->frames ? p->emuSum * 1000.0 / p->frames : 0;
     double drawAvg = p->draws ? p->drawSum * 1000.0 / p->draws : 0;
     uint32_t underruns = [[RFAudio shared] underruns] - p->underrunsAtStart;
+    NSString *ahead = ![self runAheadEnabled] ? @"desligado" :
+                      (CACurrentMediaTime() < _aheadPausedUntil ? @"pausado (sem folga)" :
+                       [NSString stringWithFormat:@"ligado (%d%%)", p->ticks ? p->aheadFrames * 100 / p->ticks : 0]);
+    NSString *input = p->inputs ? [NSString stringWithFormat:@"%.1f ms (máx %.1f)", p->inputSum * 1000.0 / p->inputs, p->inputMax * 1000.0] : @"—";
     NSString *text = [NSString stringWithFormat:
-        @"tela %.1f/s  jogo %.1f q/s\nemu %.1f ms (máx %.1f)  gl %.1f ms (máx %.1f)\nextra %d  pulos %d  atrasos %d  som-falhas %u  fila %u-%u",
+        @"tela %.1f/s  jogo %.1f q/s\nemu %.1f ms (máx %.1f)  gl %.1f ms (máx %.1f)\nextra %d  pulos %d  atrasos %d  som-falhas %u  fila %u-%u\nbotão→quadro %@  run-ahead %@",
         p->ticks / elapsed, p->frames / elapsed, emuAvg, p->emuMax * 1000.0, drawAvg, p->drawMax * 1000.0,
-        p->extraFrames, p->skippedTicks, p->lateTicks, underruns, p->minAudio == UINT32_MAX ? 0 : p->minAudio, p->maxAudio];
+        p->extraFrames, p->skippedTicks, p->lateTicks, underruns, p->minAudio == UINT32_MAX ? 0 : p->minAudio, p->maxAudio,
+        input, ahead];
     if (!self.perfLabel.hidden) self.perfLabel.text = text;
+    // Com o medidor ligado, também grava em Documents/MD16/perf.txt (para análise pelo Mac)
+    if (!self.perfLabel.hidden) RFAppendLog(@"perf.txt", [text stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]);
     p->windowStart = 0;
 }
 
@@ -338,6 +406,11 @@ typedef struct {
     [sheet addAction:[UIAlertAction actionWithTitle:filterTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         weakSelf.video.smooth = !weakSelf.video.smooth;
         [[NSUserDefaults standardUserDefaults] setBool:weakSelf.video.smooth forKey:@"RFSmooth"];
+        [weakSelf resume];
+    }]];
+    NSString *aheadTitle = [self runAheadEnabled] ? @"Reduzir atraso (run-ahead): ligado" : @"Reduzir atraso (run-ahead): desligado";
+    [sheet addAction:[UIAlertAction actionWithTitle:aheadTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [[NSUserDefaults standardUserDefaults] setBool:![weakSelf runAheadEnabled] forKey:@"RFRunAhead"];
         [weakSelf resume];
     }]];
     NSString *perfTitle = self.perfLabel.hidden ? @"Mostrar desempenho" : @"Esconder desempenho";

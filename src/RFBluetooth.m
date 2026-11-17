@@ -661,7 +661,10 @@ static NSString *rf_hex(const uint8_t *r, int len) {
             mask |= kRFActionMask[a];
         }
     }
-    rf_pad_mask = mask;
+    if (mask != rf_pad_mask) {
+        rf_pad_mask = mask;
+        RFInputChanged();
+    }
 
     BOOL menu = rf_mapping_active(&gMap[RFActionMenu], r, len);
     if (menu && !gMenuDown && self.menuPressed) {

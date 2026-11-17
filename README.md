@@ -19,6 +19,7 @@ Emulador de **Mega Drive / Genesis** (também Master System, Game Gear e SG-1000
 - **Patch automático IPS/BPS:** um `.ips`/`.bps` com o mesmo nome da ROM é aplicado ao abrir o jogo, numa cópia temporária. A ROM original não é alterada. No BPS, o CRC é conferido e o app avisa se o patch é de outra versão da ROM
 - Estados salvos em 3 slots manuais, mais um salvamento automático ao sair, com a opção "Continuar de onde parou?" ao abrir o jogo
 - SRAM (saves internos do cartucho) gravada automaticamente
+- **Run-ahead** de 1 quadro (opcional, no menu): esconde um quadro do atraso interno do jogo. Ele é suspenso sozinho se o iPad começar a perder quadros
 - Medidor de desempenho opcional (quadros por segundo e tempo de emulação e de desenho)
 
 No iPad 3, o Sonic 2 roda a 60 fps: cerca de 5–7 ms de emulação por quadro.

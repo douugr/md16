@@ -1,9 +1,17 @@
 #import "RF.h"
 #include "libretro.h"
 #include "rf_patch.h"
+#import <QuartzCore/QuartzCore.h>
 
 volatile uint32_t rf_touch_mask = 0;
 volatile uint32_t rf_pad_mask = 0;
+volatile double rf_input_changed_at = 0;
+volatile uint32_t rf_input_seq = 0;
+
+void RFInputChanged(void) {
+    rf_input_changed_at = CACurrentMediaTime();
+    rf_input_seq++;
+}
 
 NSString *RFBaseDir(void) {
     NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
@@ -50,6 +58,8 @@ static unsigned rf_frame_width = 0, rf_frame_height = 0;
 static size_t rf_frame_pitch = 0;
 static float rf_aspect = 4.0f / 3.0f;
 static bool rf_skip_video = false;
+static bool rf_mute_audio = false;
+static bool rf_fast_states = false;   // run-ahead: o core salva/restaura também o buffer de som   // quadro "previsto" do run-ahead: o som dele é descartado
 
 static bool rf_environment(unsigned cmd, void *data) {
     switch (cmd) {
@@ -78,7 +88,8 @@ static bool rf_environment(unsigned cmd, void *data) {
         }
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
             // bit 0 = vídeo, bit 1 = áudio. Pular o vídeo poupa a renderização do VDP.
-            *(int *)data = rf_skip_video ? 2 : 3;
+            // bit 2 = "estados rápidos" (run-ahead): mantém o som contínuo ao voltar o estado
+            *(int *)data = (rf_skip_video ? 2 : 3) | (rf_fast_states ? 4 : 0);
             return true;
         default:
             return false;   // opções do core ficam no padrão
@@ -94,11 +105,13 @@ static void rf_video_refresh(const void *data, unsigned width, unsigned height, 
 }
 
 static void rf_audio_sample(int16_t left, int16_t right) {
+    if (rf_mute_audio) return;
     int16_t s[2] = {left, right};
     [[RFAudio shared] pushSamples:s frames:1];
 }
 
 static size_t rf_audio_sample_batch(const int16_t *data, size_t frames) {
+    if (rf_mute_audio) return frames;
     [[RFAudio shared] pushSamples:data frames:frames];
     return frames;
 }
@@ -264,6 +277,41 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
     rf_skip_video = skip;
     retro_run();
     rf_skip_video = false;
+}
+
+static void *rf_ahead_state = NULL;
+static size_t rf_ahead_size = 0;
+
+- (BOOL)runFrameWithRunAhead {
+    if (!self.loaded) return NO;
+    size_t size = retro_serialize_size();
+    if (!size) {
+        [self runFrameSkippingVideo:NO];
+        return NO;
+    }
+    if (size > rf_ahead_size) {
+        free(rf_ahead_state);
+        rf_ahead_state = malloc(size);
+        rf_ahead_size = rf_ahead_state ? size : 0;
+    }
+    // 1) Quadro real: avança o jogo e gera o som, sem desenhar
+    [self runFrameSkippingVideo:YES];
+    rf_fast_states = true;
+    BOOL saved = rf_ahead_state && retro_serialize(rf_ahead_state, size);
+    rf_fast_states = false;
+    if (!saved) {
+        // Sem estado não dá para prever: desenha o próximo quadro de verdade na próxima volta
+        return NO;
+    }
+    // 2) Quadro previsto: mesmo controle, só para a imagem
+    rf_mute_audio = true;
+    [self runFrameSkippingVideo:NO];
+    rf_mute_audio = false;
+    // 3) Volta ao quadro real
+    rf_fast_states = true;
+    retro_unserialize(rf_ahead_state, size);
+    rf_fast_states = false;
+    return YES;
 }
 
 - (void)reset {

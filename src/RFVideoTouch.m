@@ -318,7 +318,10 @@ static CGRect rf_button_rect(RFButton b, BOOL wide) {
 - (void)updateWithEvent:(UIEvent *)event {
     if (self.controlsHidden) return;
     uint32_t mask = [self maskForTouches:[event touchesForView:self]];
-    rf_touch_mask = mask;
+    if (mask != rf_touch_mask) {
+        rf_touch_mask = mask;
+        RFInputChanged();
+    }
     if (mask != self.drawnMask) {
         self.drawnMask = mask;
         [self setNeedsDisplay];

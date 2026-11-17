@@ -23,6 +23,11 @@
 // Estado atual de cada fonte de entrada (lido pelo core a cada quadro)
 extern volatile uint32_t rf_touch_mask;
 extern volatile uint32_t rf_pad_mask;
+// Quando a entrada mudou pela última vez (CACurrentMediaTime) e um contador de mudanças,
+// para medir quanto tempo um botão espera até o emulador usá-lo
+extern volatile double rf_input_changed_at;
+extern volatile uint32_t rf_input_seq;
+void RFInputChanged(void);
 
 // Pastas: Documents/MD16/{roms,saves,states,system}
 NSString *RFBaseDir(void);
@@ -47,6 +52,10 @@ void RFAppendLog(NSString *file, NSString *line);
 - (void)runFrame;
 // Roda um quadro; com skip=YES o core não desenha o vídeo (só emula e gera áudio)
 - (void)runFrameSkippingVideo:(BOOL)skip;
+// Run-ahead de 1 quadro: roda o quadro real (sem desenhar), guarda o estado, roda o quadro
+// seguinte só para mostrar a imagem (sem som) e volta ao estado guardado. Esconde 1 quadro
+// do atraso interno do jogo. Retorna NO se o core não suporta (aí roda um quadro normal).
+- (BOOL)runFrameWithRunAhead;
 - (void)reset;
 - (void)unload;
 - (void)saveSRAM;
