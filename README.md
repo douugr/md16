@@ -19,7 +19,7 @@ Add the Cydia repository **https://douugr.github.io/repo/** (Cydia or Melder →
   - D-pad and left analog stick;
   - automatic reconnection.
   BTstack runs on its own thread, separate from the game.
-- **Upload ROMs from a browser:** the "Upload ROMs" screen shows an address (`http://<ipad-ip>:8080`); on your computer, open it and drag the files in — no cable or SSH
+- **Upload ROMs from a browser:** the "Upload ROMs" screen shows an address (`http://md16.local:8616/<code>/`, with the IP version below it and a QR code to upload from a phone). The code at the end is random and changes every time the screen opens, so nobody else on the network can reach the page;; on your computer, open it and drag the files in — no cable or SSH
 - **Automatic IPS/BPS patching:** an `.ips`/`.bps` with the same name as the ROM is applied when the game starts, to a temporary copy; the original ROM is never changed. For BPS the CRC is checked and the app warns if the patch is for another ROM version
 - 3 manual save-state slots plus an autosave on exit, with "Continue where you left off?" when the game opens
 - SRAM (cartridge saves) written automatically
@@ -61,6 +61,7 @@ The first time, `build.sh` downloads Genesis Plus GX (pinned commit) and builds 
 
 ## Licenses
 
-- The code in this repository is the author's. The icon is original, made for the project.
+- The code in this repository is released under the **MIT License** (see [LICENSE](LICENSE)). The icon is original, made for the project.
 - **Genesis Plus GX** is not included here: it is downloaded at build time and follows its own **non-commercial** license.
+- The packaged app (the `.deb` on the Cydia repo) is linked with Genesis Plus GX, so the whole binary is also bound by that non-commercial license.
 - The headers in `vendor/btstack` are from BTstack (© BlueKitchen GmbH / Matthias Ringwald) and follow the BTstack license.
