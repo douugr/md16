@@ -11,6 +11,7 @@ Add the Cydia repository **https://douugr.github.io/repo/** (Cydia or Melder →
 ## Features
 
 - OpenGL ES 2 video (RGB565), sharp (pixels) or smooth image
+- **CRT TV filter** (game menu → "Image…"): scanlines that widen on bright colors, a phosphor mask, composite-video blending (color bleeds more than brightness, so dithering turns into the smooth gradients and transparencies artists drew for TVs) and an optional gently curved screen that still fills the display. Runs at 60 fps on an iPad 3
 - RemoteIO audio, with game pacing driven by the audio queue: if the iPad falls behind, the emulator runs an extra frame without drawing, so the game neither slows down nor stutters
 - On-screen controls: 8-way D-pad, A/B/C in an arc like the original pad, START and a menu button
 - Visuals inspired by the 16-bit era: grey grid on black, chrome lettering, red and diagonal stripes; the library shows games as cartridge labels
