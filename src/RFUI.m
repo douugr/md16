@@ -393,6 +393,18 @@ typedef struct {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [weakSelf showSlotsForSaving:NO]; });
         }]];
     }
+    if ([RFAchievements shared].loggedIn) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"Achievements…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                RFAchievementsListViewController *list = [[RFAchievementsListViewController alloc] init];
+                list.onDone = ^{ [weakSelf resume]; };
+                UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:list];
+                RFThemeApplyNavigationBar(nav.navigationBar);
+                nav.modalPresentationStyle = UIModalPresentationFormSheet;
+                [weakSelf presentViewController:nav animated:YES completion:nil];
+            });
+        }]];
+    }
     [sheet addAction:[UIAlertAction actionWithTitle:@"Reset game" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         [[RFCore shared] reset];
         [weakSelf resume];
@@ -972,13 +984,10 @@ static UIImage *RFQRCode(NSString *text, CGFloat side) {
     self.tableView.rowHeight = 92;
     self.tableView.indicatorStyle = UIScrollViewIndicatorStyleWhite;
     self.tableView.tableHeaderView = [[RFLibraryHeader alloc] initWithFrame:CGRectMake(0, 0, 320, 150)];
-    self.navigationItem.rightBarButtonItems = @[
-        [[UIBarButtonItem alloc] initWithTitle:@"Controller" style:UIBarButtonItemStylePlain target:self action:@selector(openController)],
-        [[UIBarButtonItem alloc] initWithTitle:@"Upload ROMs" style:UIBarButtonItemStylePlain target:self action:@selector(openUpload)],
-    ];
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh
-                                                                                          target:self
-                                                                                          action:@selector(reload)];
+    // Controle, conquistas e envio de ROMs ficam no menu lateral (☰ ou arrastar da borda esquerda)
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh
+                                                                                           target:self
+                                                                                           action:@selector(reload)];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -1011,13 +1020,6 @@ static UIImage *RFQRCode(NSString *text, CGFloat side) {
     [self.tableView reloadData];
 }
 
-- (void)openUpload {
-    [self.navigationController pushViewController:[[RFUploadViewController alloc] init] animated:YES];
-}
-
-- (void)openController {
-    [self.navigationController pushViewController:[[RFControllerViewController alloc] init] animated:YES];
-}
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     return self.roms.count;
@@ -1103,14 +1105,23 @@ static UIImage *RFQRCode(NSString *text, CGFloat side) {
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[RFLibraryViewController alloc] initWithStyle:UITableViewStylePlain]];
-    RFThemeApplyNavigationBar(nav.navigationBar);
+    NSArray *items = @[
+        @{ @"title": @"Games", @"caption": @"Your cartridges", @"keep": @YES,
+           @"make": ^UIViewController *{ return [[RFLibraryViewController alloc] initWithStyle:UITableViewStylePlain]; } },
+        @{ @"title": @"Achievements", @"caption": @"RetroAchievements: your games and unlocks", @"keep": @YES,
+           @"make": ^UIViewController *{ return [[RFAchievementsHomeViewController alloc] init]; } },
+        @{ @"title": @"Upload ROMs", @"caption": @"Send games from a computer or phone", @"keep": @NO,
+           @"make": ^UIViewController *{ return [[RFUploadViewController alloc] init]; } },
+        @{ @"title": @"Controller", @"caption": @"Bluetooth controller and buttons", @"keep": @YES,
+           @"make": ^UIViewController *{ return [[RFControllerViewController alloc] init]; } },
+    ];
     self.window.tintColor = RFThemeRed();
-    self.window.rootViewController = nav;
+    self.window.rootViewController = [[RFSideMenuController alloc] initWithItems:items];
     [self.window makeKeyAndVisible];
     application.idleTimerDisabled = YES;
     [self migrateOldPreferences];
     [[RFBluetooth shared] start];
+    [[RFAchievements shared] start];
     return YES;
 }
 

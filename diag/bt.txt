@@ -1,0 +1,264 @@
+23:44:45.231  ---- MD16 iniciado ----
+23:44:45.239  Estado: Ligando o Bluetooth...
+23:44:48.724  BTstack estado 1
+23:44:48.855  BTstack estado 2 (pronto)
+23:44:48.858  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+23:44:48.860  Estado: Bluetooth ligado. Ligue o controle para reconectar.
+23:44:48.862  Serviço HID PSM 0x11 registrado, status 0x00
+23:44:48.864  Serviço HID PSM 0x13 registrado, status 0x00
+10:04:32.015  Falha ao abrir canal 0x11: 0x04
+10:04:32.018  Estado: Não conectou. Ligue o controle (ou coloque em pareamento) e tente de novo.
+10:06:35.141  ---- MD16 iniciado ----
+10:06:35.150  Estado: Ligando o Bluetooth...
+10:06:35.161  BTstack estado 2 (pronto)
+10:06:35.164  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+10:06:35.166  Estado: Bluetooth ligado. Ligue o controle para reconectar.
+10:06:35.170  Serviço HID PSM 0x11 registrado, status 0x00
+10:06:35.174  Serviço HID PSM 0x13 registrado, status 0x00
+10:06:38.579  Canal aberto: PSM 0x11 com E4:17:D8:AE:7E:B7
+10:06:38.599  Canal aberto: PSM 0x13 com E4:17:D8:AE:7E:B7
+10:06:38.602  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+10:06:38.604  Estado: Conectado: E4:17:D8:AE:7E:B7
+10:08:57.709  Estado: Controle esquecido
+10:08:57.775  Canal 0x0052 fechado
+10:08:57.777  Estado: Controle desconectado
+10:08:57.790  Canal 0x0051 fechado
+10:08:57.960  Desconectado (motivo 0x13)
+10:09:07.248  Busca iniciada (~12 s)
+10:09:07.250  Estado: Procurando... coloque o controle em modo de pareamento
+10:09:09.752  Encontrado 04:DA:28:E3:6B:B1 (classe 0x280704)
+10:09:09.926  Encontrado E4:17:D8:AE:7E:B7 (classe 0x002508)
+10:09:11.428  Conectando a E4:17:D8:AE:7E:B7
+10:09:11.430  Estado: Conectando...
+10:09:12.034  Canal aberto: PSM 0x11 com E4:17:D8:AE:7E:B7
+10:09:12.052  Canal aberto: PSM 0x13 com E4:17:D8:AE:7E:B7
+10:09:12.058  Carregando mapeamento de E4:17:D8:AE:7E:B7: nenhum
+10:09:12.063  Estado: Conectado: 8BitDo Pro 2
+10:09:17.734  Configuração iniciada; repouso = A1 03 0F 7F 7F 7F 7F 00 00 00 00 28 
+10:09:18.781  Direcional (hat) no byte 2
+10:09:19.405  A → tipo 1, byte 9, máscara 10
+10:09:19.905  B → tipo 1, byte 9, máscara 02
+10:09:20.405  C → tipo 1, byte 9, máscara 01
+10:09:21.555  Start → tipo 1, byte 10, máscara 08
+10:09:22.452  X (opcional) → tipo 1, byte 9, máscara 40
+10:09:22.895  Y (opcional) → tipo 1, byte 9, máscara 08
+10:09:23.326  Z (opcional) → tipo 1, byte 9, máscara 80
+10:09:23.844  Mode (opcional) → tipo 1, byte 10, máscara 04
+10:09:24.531  Abrir o menu do emulador (opcional) → tipo 1, byte 10, máscara 10
+10:09:24.539  Mapeamento salvo
+10:13:35.129  ---- MD16 iniciado ----
+10:13:35.140  Estado: Ligando o Bluetooth...
+10:13:38.608  ---- MD16 iniciado ----
+10:13:38.616  Estado: Ligando o Bluetooth...
+10:13:42.495  BTstack estado 1
+10:13:42.513  BTstack estado 2 (pronto)
+10:13:42.516  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+10:13:42.518  Estado: Bluetooth ligado. Ligue o controle para reconectar.
+10:13:42.521  Serviço HID PSM 0x11 registrado, status 0x00
+10:13:42.524  Serviço HID PSM 0x13 registrado, status 0x00
+10:13:45.958  Canal aberto: PSM 0x11 com E4:17:D8:AE:7E:B7
+10:13:46.039  Canal aberto: PSM 0x13 com E4:17:D8:AE:7E:B7
+10:13:46.045  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+10:13:46.047  Estado: Conectado: E4:17:D8:AE:7E:B7
+10:13:55.899  Configuração iniciada; repouso = A1 03 0F 7F 7F 7F 7F 00 00 00 00 28 
+10:13:59.244  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+10:13:59.246  Configuração cancelada
+10:14:03.952  Estado: Controle esquecido
+10:14:06.563  Canal 0x0056 fechado
+10:14:06.566  Estado: Controle desconectado
+10:14:06.569  Canal 0x0055 fechado
+10:14:06.571  Desconectado (motivo 0x08)
+10:14:09.831  Busca iniciada (~12 s)
+10:14:09.835  Estado: Procurando... coloque o controle em modo de pareamento
+10:14:12.024  Encontrado 04:DA:28:E3:6B:B1 (classe 0x280704)
+10:14:15.021  Estado: Controle esquecido
+10:14:22.743  Busca terminada: 1 dispositivo(s)
+10:14:22.745  Estado: Busca terminada. Toque no controle para conectar.
+10:14:33.157  Busca iniciada (~12 s)
+10:14:33.159  Estado: Procurando... coloque o controle em modo de pareamento
+10:14:33.319  Encontrado E4:17:D8:AE:7E:B7 (classe 0x002508)
+10:14:34.208  Conectando a E4:17:D8:AE:7E:B7
+10:14:34.210  Estado: Conectando...
+10:14:34.822  Canal aberto: PSM 0x11 com E4:17:D8:AE:7E:B7
+10:14:34.838  Canal aberto: PSM 0x13 com E4:17:D8:AE:7E:B7
+10:14:34.844  Carregando mapeamento de E4:17:D8:AE:7E:B7: nenhum
+10:14:34.849  Estado: Conectado: 8BitDo Pro 2
+10:14:38.331  Configuração iniciada; repouso = A1 03 0F 7F 7F 7F 7F 00 00 00 00 28 
+10:14:39.326  Direcional (hat) no byte 2
+10:14:40.726  A → tipo 1, byte 9, máscara 10
+10:14:41.301  B → tipo 1, byte 9, máscara 02
+10:14:41.782  C → tipo 1, byte 9, máscara 01
+10:14:42.732  Start → tipo 1, byte 10, máscara 08
+10:14:43.567  X (opcional) → tipo 1, byte 9, máscara 40
+10:14:44.039  Y (opcional) → tipo 1, byte 9, máscara 08
+10:14:44.476  Z (opcional) → tipo 1, byte 9, máscara 80
+10:14:45.600  Mode (opcional) → tipo 1, byte 10, máscara 04
+10:14:46.056  Abrir o menu do emulador (opcional) → tipo 1, byte 10, máscara 10
+10:14:46.066  Mapeamento salvo
+10:44:35.752  Canal 0x0058 fechado
+10:44:35.756  Estado: Controle desconectado
+10:44:35.758  Canal 0x0057 fechado
+10:44:35.760  Desconectado (motivo 0x08)
+10:46:05.267  ---- MD16 iniciado ----
+10:46:05.279  Estado: Ligando o Bluetooth...
+10:46:08.605  BTstack estado 1
+10:46:08.721  BTstack estado 2 (pronto)
+10:46:08.724  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+10:46:08.726  Estado: Bluetooth ligado. Ligue o controle para reconectar.
+10:46:08.728  Serviço HID PSM 0x11 registrado, status 0x00
+10:46:08.730  Serviço HID PSM 0x13 registrado, status 0x00
+10:46:23.913  Estado: Controle esquecido
+10:46:24.656  Busca iniciada (~12 s)
+10:46:24.658  Estado: Procurando... coloque o controle em modo de pareamento
+10:46:25.528  Encontrado 04:DA:28:E3:6B:B1 (classe 0x280704)
+10:46:27.412  Encontrado E4:17:D8:AE:7E:B7 (classe 0x002508)
+10:46:28.381  Canal 0x0059 fechado
+10:46:28.385  Desconectado (motivo 0x22)
+10:46:28.477  Conectando a E4:17:D8:AE:7E:B7
+10:46:28.479  Estado: Conectando...
+10:46:29.461  Canal aberto: PSM 0x11 com E4:17:D8:AE:7E:B7
+10:46:29.473  Canal aberto: PSM 0x13 com E4:17:D8:AE:7E:B7
+10:46:29.479  Carregando mapeamento de E4:17:D8:AE:7E:B7: nenhum
+10:46:29.483  Estado: Conectado: 8BitDo Pro 2
+10:46:31.736  Configuração iniciada; repouso = A1 03 0F 7F 7F 7F 7F 00 00 00 00 14 
+10:46:32.852  Direcional (hat) no byte 2
+10:46:40.802  Carregando mapeamento de E4:17:D8:AE:7E:B7: nenhum
+10:46:40.804  Configuração cancelada
+10:46:42.936  Configuração iniciada; repouso = A1 03 0F 7F 7F 7F 7F 00 00 00 00 28 
+10:46:43.976  Direcional (hat) no byte 2
+10:46:44.634  A → tipo 1, byte 9, máscara 10
+10:46:45.194  B → tipo 1, byte 9, máscara 02
+10:46:45.725  C → tipo 1, byte 9, máscara 01
+10:46:46.197  Start → tipo 1, byte 9, máscara 40
+10:46:48.237  Configuração concluída (opcionais pulados)
+10:46:48.968  Configuração iniciada; repouso = A1 03 0F 7F 7F 7F 7F 00 00 00 00 28 
+10:46:49.805  Direcional (hat) no byte 2
+10:46:50.415  A → tipo 1, byte 9, máscara 10
+10:46:50.858  B → tipo 1, byte 9, máscara 02
+10:46:51.295  C → tipo 1, byte 9, máscara 01
+10:46:51.862  Start → tipo 1, byte 10, máscara 08
+10:46:52.767  X (opcional) → tipo 1, byte 9, máscara 40
+10:46:53.173  Y (opcional) → tipo 1, byte 9, máscara 08
+10:46:53.576  Z (opcional) → tipo 1, byte 9, máscara 80
+10:46:54.153  Mode (opcional) → tipo 1, byte 10, máscara 04
+10:46:54.697  Abrir o menu do emulador (opcional) → tipo 1, byte 10, máscara 10
+10:46:54.705  Mapeamento salvo
+10:52:44.560  ---- MD16 iniciado ----
+10:52:44.570  Estado: Ligando o Bluetooth...
+10:52:48.130  BTstack estado 1
+10:52:48.247  BTstack estado 2 (pronto)
+10:52:48.249  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+10:52:48.251  Estado: Bluetooth ligado. Ligue o controle para reconectar.
+10:52:48.254  Serviço HID PSM 0x11 registrado, status 0x00
+10:52:48.257  Serviço HID PSM 0x13 registrado, status 0x00
+10:53:03.620  Falha ao abrir canal 0x11: 0x04
+10:53:03.623  Estado: Não conectou. Ligue o controle (ou coloque em pareamento) e tente de novo.
+11:09:35.646  Estado: Controle esquecido
+11:09:42.302  Busca iniciada (~12 s)
+11:09:42.306  Estado: Procurando... coloque o controle em modo de pareamento
+11:09:42.762  Encontrado 04:DA:28:E3:6B:B1 (classe 0x280704)
+11:09:45.000  Encontrado E4:17:D8:AE:7E:B7 (classe 0x002508)
+11:09:45.982  Conectando a E4:17:D8:AE:7E:B7
+11:09:45.985  Estado: Conectando...
+11:09:46.502  Canal aberto: PSM 0x11 com E4:17:D8:AE:7E:B7
+11:09:46.518  Canal aberto: PSM 0x13 com E4:17:D8:AE:7E:B7
+11:09:46.524  Carregando mapeamento de E4:17:D8:AE:7E:B7: nenhum
+11:09:46.526  Estado: Conectado: 8BitDo Pro 2
+11:09:47.630  Configuração iniciada; repouso = A1 03 0F 7F 7F 7F 7F 00 00 00 00 28 
+11:09:49.120  Direcional (hat) no byte 2
+11:09:49.771  A → tipo 1, byte 9, máscara 10
+11:09:50.256  B → tipo 1, byte 9, máscara 02
+11:09:50.729  C → tipo 1, byte 9, máscara 01
+11:09:51.124  Start → tipo 1, byte 9, máscara 40
+11:09:52.661  Configuração concluída (opcionais pulados)
+11:09:53.523  Configuração iniciada; repouso = A1 03 0F 7F 7F 7F 7F 00 00 00 00 28 
+11:09:54.354  Direcional (hat) no byte 2
+11:09:54.794  A → tipo 1, byte 9, máscara 10
+11:09:55.149  B → tipo 1, byte 9, máscara 02
+11:09:55.460  C → tipo 1, byte 9, máscara 01
+11:09:56.018  Start → tipo 1, byte 10, máscara 08
+11:09:56.980  X (opcional) → tipo 1, byte 9, máscara 40
+11:09:57.338  Y (opcional) → tipo 1, byte 9, máscara 08
+11:09:57.678  Z (opcional) → tipo 1, byte 9, máscara 80
+11:09:58.185  Mode (opcional) → tipo 1, byte 10, máscara 04
+11:09:58.715  Abrir o menu do emulador (opcional) → tipo 1, byte 10, máscara 10
+11:09:58.723  Mapeamento salvo
+16:31:53.633  ---- MD16 iniciado ----
+16:31:53.641  Estado: Ligando o Bluetooth...
+16:31:53.650  BTstack estado 2 (pronto)
+16:31:53.653  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+16:31:53.655  Estado: Bluetooth ligado. Ligue o controle para reconectar.
+16:31:53.662  Serviço HID PSM 0x11 registrado, status 0x00
+16:31:53.666  Serviço HID PSM 0x13 registrado, status 0x00
+16:33:04.007  Estado: Controle esquecido
+16:33:10.766  Busca iniciada (~12 s)
+16:33:10.770  Estado: Procurando... coloque o controle em modo de pareamento
+16:33:10.975  Encontrado D0:C2:4E:1C:8D:E5 (classe 0x0C043C)
+16:33:10.990  Encontrado E4:17:D8:AE:7E:B7 (classe 0x002508)
+16:33:11.734  Encontrado 04:DA:28:E3:6B:B1 (classe 0x280704)
+16:33:12.867  Conectando a E4:17:D8:AE:7E:B7
+16:33:12.869  Estado: Conectando...
+16:33:13.258  Canal aberto: PSM 0x11 com E4:17:D8:AE:7E:B7
+16:33:13.272  Canal aberto: PSM 0x13 com E4:17:D8:AE:7E:B7
+16:33:13.281  Carregando mapeamento de E4:17:D8:AE:7E:B7: nenhum
+16:33:13.283  Estado: Conectado: 8BitDo Pro 2
+16:33:15.324  Configuração iniciada; repouso = A1 03 0F 7F 7F 7F 7F 00 00 00 00 14 
+16:33:16.172  Direcional (hat) no byte 2
+16:33:16.769  A → tipo 1, byte 9, máscara 10
+16:33:17.244  B → tipo 1, byte 9, máscara 02
+16:33:17.762  C → tipo 1, byte 9, máscara 01
+16:33:18.857  Start → tipo 1, byte 10, máscara 08
+16:33:19.454  X (opcional) → tipo 1, byte 9, máscara 40
+16:33:19.874  Y (opcional) → tipo 1, byte 9, máscara 08
+16:33:20.350  Z (opcional) → tipo 1, byte 9, máscara 80
+16:33:21.066  Mode (opcional) → tipo 1, byte 10, máscara 04
+16:33:21.584  Abrir o menu do emulador (opcional) → tipo 1, byte 10, máscara 10
+16:33:21.595  Mapeamento salvo
+12:27:03.169  ---- MD16 iniciado ----
+12:27:03.178  Estado: Ligando o Bluetooth...
+12:27:03.188  BTstack estado 2 (pronto)
+12:27:03.191  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+12:27:03.194  Estado: Bluetooth ligado. Ligue o controle para reconectar.
+12:27:03.204  Serviço HID PSM 0x11 registrado, status 0x69 (FALHOU: feche o PadProbe e outros apps de Bluetooth)
+12:27:03.208  Serviço HID PSM 0x13 registrado, status 0x69 (FALHOU: feche o PadProbe e outros apps de Bluetooth)
+12:27:18.681  Falha ao abrir canal 0x11: 0x04
+12:27:18.683  Estado: Não conectou. Ligue o controle (ou coloque em pareamento) e tente de novo.
+19:56:35.202  ---- MD16 iniciado ----
+19:56:35.211  Estado: Ligando o Bluetooth...
+19:56:43.215  BTstack não ficou pronto em 8 s
+19:56:43.217  Estado: O Bluetooth não iniciou. Deixe o Wi-Fi do iPad LIGADO, feche e abra o app de novo.
+19:56:44.819  Estado: O Bluetooth ainda não está pronto. Deixe o Wi-Fi do iPad LIGADO, feche e abra o app de novo.
+19:56:45.534  BTstack estado 1
+19:56:45.666  BTstack estado 2 (pronto)
+19:56:45.669  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+19:56:45.670  Estado: Bluetooth ligado. Ligue o controle para reconectar.
+19:56:45.673  Serviço HID PSM 0x11 registrado, status 0x00
+19:56:45.679  Serviço HID PSM 0x13 registrado, status 0x00
+19:56:46.207  Canal aberto: PSM 0x11 com E4:17:D8:AE:7E:B7
+19:56:46.219  Canal aberto: PSM 0x13 com E4:17:D8:AE:7E:B7
+19:56:46.222  Carregando mapeamento de E4:17:D8:AE:7E:B7: encontrado
+19:56:46.223  Estado: Conectado: E4:17:D8:AE:7E:B7
+12:51:25.897  ---- MD16 started ----
+12:51:25.906  Status: Turning Bluetooth on...
+12:51:25.914  BTstack state 2 (ready)
+12:51:25.917  Loading button map for E4:17:D8:AE:7E:B7: found
+12:51:25.922  Status: Bluetooth on. Turn on your controller to reconnect.
+12:51:25.925  HID service PSM 0x11 registered, status 0x00
+12:51:25.928  HID service PSM 0x13 registered, status 0x00
+12:51:27.603  Failed to open channel 0x11: 0x04
+12:51:27.605  Status: Could not connect. Turn on the controller (or put it in pairing mode) and try again.
+12:08:34.944  ---- MD16 started ----
+12:08:34.952  Status: Turning Bluetooth on...
+12:08:42.962  BTstack was not ready after 8 s
+12:08:42.965  Status: Bluetooth did not start. Keep the iPad's Wi-Fi ON, then close and reopen the app.
+12:09:12.685  Status: Bluetooth is not ready yet. Keep the iPad's Wi-Fi ON, then close and reopen the app.
+11:11:18.648  ---- MD16 started ----
+11:11:18.655  Status: Turning Bluetooth on...
+11:11:26.658  BTstack was not ready after 8 s
+11:11:26.660  Status: Bluetooth did not start. Keep the iPad's Wi-Fi ON, then close and reopen the app.
+11:11:28.710  Status: Bluetooth is not ready yet. Keep the iPad's Wi-Fi ON, then close and reopen the app.
+11:11:43.806  ---- MD16 started ----
+11:11:43.814  Status: Turning Bluetooth on...
+11:11:51.801  Status: Bluetooth is not ready yet. Keep the iPad's Wi-Fi ON, then close and reopen the app.
+11:11:51.818  BTstack was not ready after 8 s
+11:11:51.820  Status: Bluetooth did not start. Keep the iPad's Wi-Fi ON, then close and reopen the app.

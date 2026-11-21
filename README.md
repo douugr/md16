@@ -12,6 +12,8 @@ Add the Cydia repository **https://douugr.github.io/repo/** (Cydia or Melder →
 
 - OpenGL ES 2 video (RGB565), sharp (pixels) or smooth image
 - **CRT TV filter** (game menu → "Image…"): scanlines that widen on bright colors, a phosphor mask, composite-video blending (color bleeds more than brightness, so dithering turns into the smooth gradients and transparencies artists drew for TVs) and an optional gently curved screen that still fills the display. Runs at 60 fps on an iPad 3
+- **RetroAchievements:** sign in with your retroachievements.org account (side menu → Achievements) and unlock achievements while you play, with a pop-up and the badge of each one. The Achievements screen lists your games and their unlocks, and the game menu shows the achievements of the game you are playing. Save states keep the achievement progress. For now unlocks count in Casual mode only (Hardcore needs approval from RetroAchievements), and only original, unmodified games are recognized
+- **Side menu:** Games, Achievements, Upload and Controller live in a drawer (☰ button or swipe from the left edge)
 - RemoteIO audio, with game pacing driven by the audio queue: if the iPad falls behind, the emulator runs an extra frame without drawing, so the game neither slows down nor stutters
 - On-screen controls: 8-way D-pad, A/B/C in an arc like the original pad, START and a menu button
 - Visuals inspired by the 16-bit era: grey grid on black, chrome lettering, red and diagonal stripes; the library shows games as cartridge labels
@@ -63,6 +65,7 @@ The first time, `build.sh` downloads Genesis Plus GX (pinned commit) and builds 
 ## Licenses
 
 - The code in this repository is released under the **MIT License** (see [LICENSE](LICENSE)). The icon is original, made for the project.
+- **rcheevos** (RetroAchievements runtime) is © RetroAchievements, MIT License. It is downloaded at build time (tag pinned in `build.sh`).
 - **Genesis Plus GX** is not included here: it is downloaded at build time and follows its own **non-commercial** license.
 - The packaged app (the `.deb` on the Cydia repo) is linked with Genesis Plus GX, so the whole binary is also bound by that non-commercial license.
 - The headers in `vendor/btstack` are from BTstack (© BlueKitchen GmbH / Matthias Ringwald) and follow the BTstack license.

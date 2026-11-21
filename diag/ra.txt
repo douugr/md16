@@ -1,0 +1,12 @@
+12:08:34.962  Hardcore disabled
+12:08:34.964  user agent: MD16/1.3 (iOS 8.4.1) genesis_plus_gx/v1.7.4 rcheevos/12.5
+12:08:53.846  Attempting to log in Douugr (with password)
+12:08:54.283  Douugr logged in successfully
+11:11:18.653  Hardcore disabled
+11:11:18.656  user agent: MD16/1.3 (iOS 8.4.1) genesis_plus_gx/v1.7.4 rcheevos/12.5
+11:11:18.657  Attempting to log in Douugr (with token)
+11:11:19.093  Douugr logged in successfully
+11:11:43.817  Hardcore disabled
+11:11:43.818  user agent: MD16/1.3 (iOS 8.4.1) genesis_plus_gx/v1.7.4 rcheevos/12.5
+11:11:43.821  Attempting to log in Douugr (with token)
+11:11:44.274  Douugr logged in successfully
